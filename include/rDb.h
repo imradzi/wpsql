@@ -4,8 +4,8 @@
 #include <boost/range/join.hpp>
 #include <boost/tokenizer.hpp>
 #include <string>
-#include "logging.hpp"
 #include "wpSQLDatabase.h"
+#include "logging.hpp"
 
 using ConvertFunction = std::function<std::string(int, const std::string &)>;
 

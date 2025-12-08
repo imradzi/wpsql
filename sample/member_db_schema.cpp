@@ -1,6 +1,6 @@
 #include "member_db.h"
 
-std::vector<DB::DBObjects> MembersDb::objectList() const {
+std::vector<DB::DBObjects> MemberDb::objectList() const {
   std::vector<DB::DBObjects> list{
       //
       {"ul_keys",

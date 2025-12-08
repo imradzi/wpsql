@@ -1,47 +1,16 @@
-#include "precompiled/libcommon.h"
-#ifdef _WIN32
-#define _CRTDBG_MAP_ALLOC
-#include <stdlib.h>
-#include <crtdbg.h>
-#endif
-#ifdef _WIN32
-#include "winsock2.h"
-#endif
-
-#ifdef __clang__
-#if __has_warning("-Wdeprecated-enum-enum-conversion")
-#pragma clang diagnostic ignored "-Wdeprecated-enum-enum-conversion"  // warning: bitwise operation between different enumeration types ('XXXFlags_' and 'XXXFlagsPrivate_') is deprecated
-#endif
-#endif
 #include <string>
 #include <filesystem>
-#ifdef __WX__
-#include "wx/wxprec.h"
-#ifndef WX_PRECOMP
-#include "wx/wx.h"
-#endif
-#include "wx/xml/xml.h"
-#include "wx/filename.h"
-#include "wx/wfstream.h"
-#include "wx/zipstrm.h"
-#include "wx/dir.h"
-#include "global.h"
 #include "rDb.h"
-#include "logger.h"
-
-#else
-#include "rDb.h"
-#endif
 
 #include "ZIP.h"
-#include "logger.h"
+#include "logging.hpp"
 
 namespace fs = std::filesystem;
 
 static constexpr int numOfDailyBackup = 7;
 static void DoTrimWeeklyFolder(const std::string &folderName) {
     // keep only latest 7 zip file
-    ShowLog(DB::concat("Trimming weekly backup folder ", folderName));
+    LOG_INFO("Trimming weekly backup folder {}", folderName);
     std::vector<std::string> filenameList;
     for (auto& e : fs::directory_iterator {folderName}) {
         if (e.is_regular_file()) {
@@ -55,7 +24,7 @@ static void DoTrimWeeklyFolder(const std::string &folderName) {
     int cnt = 0;
     for (std::vector<std::string>::reverse_iterator it = filenameList.rbegin(); it != filenameList.rend(); it++, cnt++) {  // cannot use reverse range
         if (cnt >= numOfDailyBackup) {
-            ShowLog("Removing old file " + *it);
+            LOG_INFO("Removing old file {}", *it);
             fs::remove(*it);
         }
     }
@@ -91,30 +60,30 @@ bool DB::SQLiteBase::BackupDB(int noOfBackupToKeep, std::string folderName, std:
 
         if (fnIsStopping && fnIsStopping()) return false;
         {
-            ShowLog(fmt::format("Hourly Backup Master started. {}", GetDBName()));
+            LOG_INFO("Hourly Backup Master started. {}", GetDBName());
             wpSQLDatabase toBackup;
             toBackup.Open(GetDBName());
             if (toBackup.BackupTo(folderName + fileName, fnIsStopping) != SQLITE_OK) return false;
-            ShowLog(fmt::format("Hourly Backup Master completed. {}", GetDBName()));
+            LOG_INFO("Hourly Backup Master completed. {}", GetDBName());
         }
         if (fnIsStopping && fnIsStopping()) return false;
         if (!tFileName.empty()) {
-            ShowLog(fmt::format("Hourly Backup Transaction started. {}", GetTransactionDBName()));
+            LOG_INFO("Hourly Backup Transaction started. {}", GetTransactionDBName());
             wpSQLDatabase toBackup;
             toBackup.Open(GetTransactionDBName());
             if (toBackup.BackupTo(folderName + tFileName, fnIsStopping) != SQLITE_OK) return false;
-            ShowLog(fmt::format("Hourly Backup Transaction completed. {}", GetTransactionDBName()));
+            LOG_INFO("Hourly Backup Transaction completed. {}", GetTransactionDBName());
         }
 
         if (fnIsStopping && fnIsStopping()) return false;
         {
-            ShowLog("Zipping backup started.");
+            LOG_INFO("Zipping backup started.");
             auto f = folderName + "backup" + GetEpoch() + ".zip";
             Partio::ZipFileWriter zip(f);
             {
                 std::ostream* o = zip.Add_File(fileName);
                 std::ifstream in(folderName + fileName, std::ios::in | std::ios::binary);
-                ShowLog("Zipping " + folderName + fileName);
+                LOG_INFO("Zipping {} {}", folderName, fileName);
                 size_t size {50000};
                 while (!in.eof()) {
                     std::string buf(size, '\0');
@@ -127,7 +96,7 @@ bool DB::SQLiteBase::BackupDB(int noOfBackupToKeep, std::string folderName, std:
             {
                 std::ostream* o = zip.Add_File(tFileName);
                 std::ifstream in(folderName + tFileName, std::ios::in | std::ios::binary);
-                ShowLog("Zipping " + folderName + tFileName);
+                LOG_INFO("Zipping {} {}", folderName, tFileName);
                 size_t size {50000};
                 while (!in.eof()) {
                     std::string buf(size, '\0');
@@ -137,7 +106,7 @@ bool DB::SQLiteBase::BackupDB(int noOfBackupToKeep, std::string folderName, std:
                 o->flush();
                 delete o;
             }
-            ShowLog("Zipping backup completed.");
+            LOG_INFO("Zipping backup completed.");
         }
         // keep only latest 2 zip file
         std::vector<std::string> filenameList;
@@ -157,12 +126,10 @@ bool DB::SQLiteBase::BackupDB(int noOfBackupToKeep, std::string folderName, std:
             if (cnt >= noOfBackupToKeep) {
                 auto fileName = fs::path(*it).filename().string();
                 auto t = GetDateFromString(fileName);
-                // ShowLog("Checking " + *it + "(" + std::to_string(t.time_since_epoch().count()) + ")-> " + FormatDate(t) + " vs " + FormatDate(time_now));
-                // ShowLog("Begining of day " + std::to_string(GetBeginOfDay(t).time_since_epoch().count()) + " vs " + std::to_string(GetBeginOfDay(time_now).time_since_epoch().count()));
                 if (GetBeginOfDay(t) != GetBeginOfDay(time_now)) {
                     needTrimWeekly = true;
                     std::string newName = folderName + std::string("Weekly") + std::string(1, fs::path::preferred_separator) + fileName;
-                    ShowLog("renaming " + *it + " to " + newName);
+                    LOG_INFO("renaming {} to {}", *it, newName);
                     fs::rename(*it, newName);
                 } else {
                     fs::remove(*it);
@@ -174,11 +141,11 @@ bool DB::SQLiteBase::BackupDB(int noOfBackupToKeep, std::string folderName, std:
         LogStrFile(folderName + "finish.txt", startBackupStr);
         return true;
     } catch (std::exception& e) {
-        ShowLog(fmt::format("Backup error: {}", e.what()));
+        LOG_ERROR("Backup error: {}", e.what());
     } catch (wpSQLException& e) {
-        ShowLog(fmt::format("Backup sql error: {}", e.message));
+        LOG_ERROR("Backup sql error: {}", e.message);
     } catch (...) {
-        ShowLog("Backup error: unknown!");
+        LOG_ERROR("Backup error: unknown!");
     }
     return false;
 }

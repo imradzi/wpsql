@@ -1,31 +1,7 @@
-#include "precompiled/libcommon.h"
-#ifdef _WIN32
-#define _CRTDBG_MAP_ALLOC
-#include <stdlib.h>
-#include <crtdbg.h>
-#endif
-#ifdef _WIN32
-#include "winsock2.h"
-#endif
-
-#ifdef __clang__
-#if __has_warning("-Wdeprecated-enum-enum-conversion")
-#pragma clang diagnostic ignored "-Wdeprecated-enum-enum-conversion"  // warning: bitwise operation between different enumeration types ('XXXFlags_' and 'XXXFlagsPrivate_') is deprecated
-#endif
-#endif
-
-#ifdef __WX__
-#include "wx/wxprec.h"
-#ifndef WX_PRECOMP
-#include "wx/wx.h"
-#endif
-#include <wx/filefn.h>
-
-#include "global.h"
-#endif
 #include "rDb.h"
-#include "logger.h"
+#include "logging.hpp"
 #include <filesystem>
+
 namespace fs = std::filesystem;
 
 bool NeedDivision(const std::string &colName) {
@@ -76,9 +52,9 @@ void DB::SQLiteBase::RestructureTable(const std::string &tabName, const DB::DBOb
             GetSession().ExecuteUpdate("drop table " + oldName);
         }
     } catch (wpSQLException &e) {
-        ShowLog(fmt::format("RestructureTable: error = {}", e.message));
+        LOG_ERROR("RestructureTable: error = {}", e.message);
     } catch (std::exception &e) {
-        ShowLog(fmt::format("RestructureTable: error = {}", e.what()));
+        LOG_ERROR("RestructureTable: error = {}", e.what());
     }
 }
 
@@ -136,7 +112,7 @@ void DB::SQLiteBase::RestructureTable(const std::string &tabName, std::unordered
 
 void DB::SQLiteBase::CheckSchemaAndRestructure() {
     try {
-        ShowLog(fmt::format("CheckSchemaAndRestructure: checking {}", GetDBName()));
+        LOG_INFO("CheckSchemaAndRestructure: checking {}", GetDBName());
         std::string tempDBName = ":memory:";
         std::string selectTableList = "select name from sqlite_master where type='table' order by name";  // check only tables exist in current. The extra will auto-create with correct struct
         
@@ -202,22 +178,22 @@ void DB::SQLiteBase::CheckSchemaAndRestructure() {
         int nDropped {0};
         for (const auto &tabName : tableToDrop) {
             try {
-                //ShowLog("Dropping..." + tabName);
+                LOG_INFO("Dropping... {}", tabName);
                 GetSession().ExecuteUpdate(fmt::format("drop table {}", tabName));
                 nDropped++;
             } catch (wpSQLException &e) {
-                ShowLog("Failed to drop " + tabName + e.message);
+                LOG_ERROR("Failed to drop {} : {}", tabName, e.message);
             } catch (std::exception &e) {
-                ShowLog(std::string("Failed to drop ") + tabName + e.what());
+                LOG_ERROR("Failed to drop {} : {}", tabName, e.what());
             }
         }
         if (nDropped > 0) {
             GetSession().Vacuum();
         }
         tableToDrop.clear();
-        ShowLog(fmt::format("CheckSchemaAndRestructure: {} DONE. No of tables changed: {}, no of tables dropped: {}", GetDBName(), nChanged, nDropped));
+        LOG_INFO("CheckSchemaAndRestructure: {} DONE. No of tables changed: {}, no of tables dropped: {}", GetDBName(), nChanged, nDropped);
     }
     catch (const std::exception& e) {
-        ShowLog(fmt::format("CheckSchemaAndRestructure caught std::exception: {}", e.what()));
+        LOG_ERROR("CheckSchemaAndRestructure caught std::exception: {}", e.what());
     }
 }

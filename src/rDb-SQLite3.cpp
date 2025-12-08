@@ -1,37 +1,3 @@
-#include "precompiled/libcommon.h"
-#ifdef _WIN32
-#define _CRTDBG_MAP_ALLOC
-#include <stdlib.h>
-#include <crtdbg.h>
-#endif
-
-#ifdef _WIN32
-#include "winsock2.h"
-#endif
-
-#ifdef __clang__
-#if __has_warning("-Wdeprecated-enum-enum-conversion")
-#pragma clang diagnostic ignored "-Wdeprecated-enum-enum-conversion"  // warning: bitwise operation between different enumeration types ('XXXFlags_' and 'XXXFlagsPrivate_') is deprecated
-#endif
-#endif
-
-#ifdef __WX__
-#include "wx/wxprec.h"
-
-#ifndef WX_PRECOMP
-#include "wx/wx.h"
-#endif
-#include "wx/file.h"
-#include "wx/filename.h"
-#include "wx/dir.h"
-#include "wx/xml/xml.h"
-#include "wx/tokenzr.h"
-#include "global.h"
-#include "words.h"
-#include "ExcelReader.h"
-#include "xmlParser.h"
-#endif
-
 #include <thread>
 #include <fmt/format.h>
 
@@ -42,8 +8,7 @@
 #include <iostream>
 #include <fstream>
 #include "rDb.h"
-#include "net.h"
-#include "logger.h"
+#include "logging.hpp"
 
 namespace fs = std::filesystem;
 using namespace std::chrono_literals;
@@ -65,11 +30,6 @@ bool DB::SQLiteBase::IsDataBaseExist(const std::string &dbName, bool toCreate) {
 
 bool DB::SQLiteBase::Create() {
     return !IsDataBaseExist(_dbName, true);
-}
-
-std::string DB::SQLiteBase::GetDatabaseIdentity() {
-    ShowLog("GetDatabaseIdentity at root level: SHOULD NOT ALLOW");
-    return thisServerID();
 }
 
 DB::SQLiteBase::SQLiteBase(const std::string &dbName, bool _turnOffSync, bool _isExclusive, bool _usingWAL, bool journal)
@@ -218,7 +178,7 @@ void DB::SQLiteBase::CreateObject(const std::string &objectName, const DB::Objec
             }
         }
     } catch (wpSQLException &e) {
-        ShowLog(fmt::format("Error opening {}: {}", _dbName, e.message));
+        LOG_ERROR("Error opening {}: {}", _dbName, e.message);
         exit(-1);
     }
 }
@@ -256,39 +216,23 @@ bool DB::SQLiteBase::DeleteDB() {
 
 int DB::SQLiteBase::ProcessBusyHandler(int nTimesCalled) {  // 0-nomore wait; non-zero continue wait;
     if (nTimesCalled == 0)
-        ShowLog("Database locked. Sleep for 60 secs.");
+        LOG_WARN("Database locked. Sleep for 60 secs.");
     else
-        ShowLog("Database is still locked. Sleep for another 60 secs.");
+        LOG_WARN("Database is still locked. Sleep for another 60 secs.");
     std::this_thread::yield();
     std::this_thread::sleep_for(60s);
     return 1;
 }
 
-// static std::mutex m_listOpened;
-// std::unordered_set<std::string> m_openedDbs;
-//
-// void ListOpenedDBs() {
-//     std::lock_guard m(m_listOpened);
-//     ShowLog("</**** ALL OPENED DB ****");
-//     for (auto &x : m_openedDbs) {
-//         ShowLog("    > " + x);
-//     }
-//     ShowLog("**** ALL OPENED DB ****/>");
-// }
-
-void DB::SQLiteBase::Open(bool checkAndCreate) {
+void DB::SQLiteBase::Open(bool checkAndCreate, OpenMode mode) {
+    openMode = mode;
     bool toExecuteCommand = isNewDatabase = false;
     if (boost::iequals(_dbName, ":memory:"))
         toExecuteCommand = isNewDatabase = true;
     else
         toExecuteCommand = isNewDatabase = !std::filesystem::exists(_dbName);
-    db->Open(_dbName);
-
-    //{
-    //    std::lock_guard m(m_listOpened);
-    //    m_openedDbs.insert(_dbName);
-    //}
-    // ListOpenedDBs();
+    if (toExecuteCommand) mode = OpenMode::ReadWrite;
+    db->Open(_dbName, openMode);
 
     if (journalOff)
         db->ExecuteUpdate("PRAGMA journal_mode=OFF");
@@ -297,13 +241,10 @@ void DB::SQLiteBase::Open(bool checkAndCreate) {
     if (turnOffSynchronize) db->ExecuteUpdate("PRAGMA synchronous=off");
     if (exclusiveMode) db->ExecuteUpdate("PRAGMA locking_mode=EXCLUSIVE");
 
-    // initfunction has to done here for old database since the checkstructure may use some of the functions
-    // if it's new database, the initfunction may fail because non-existing tables.
-
     if (!isNewDatabase) {
         InitFunction();  // create userdefined functions - tables already exists;
     }
-    if (checkAndCreate || toExecuteCommand) {
+    if ((checkAndCreate || toExecuteCommand) && mode == OpenMode::ReadWrite) {
         CreateAllObjects(checkAndCreate, toExecuteCommand);
         if (toExecuteCommand) {
             PopulateTables();  // only executed once, first time created.
@@ -312,7 +253,6 @@ void DB::SQLiteBase::Open(bool checkAndCreate) {
         CheckStructure();
     }
     ResetRegistry();  // clearing all remaining prepared statements;
-    // auto a = GetSession().GetAllActivePreparedStatement();
     InitializeLocalVariables();
     if (isNewDatabase) {
         InitFunction();  // create userdefined functions - tables just created above.
@@ -323,15 +263,7 @@ void DB::SQLiteBase::Open(bool checkAndCreate) {
 void DB::SQLiteBase::Close() {
     if (db->IsOpen()) {
         db->Close();
-        // ShowLog("**** DB CLOSED ****> " + _dbName);
-        //{
-        //     std::lock_guard m(m_listOpened);
-        //     auto it = m_openedDbs.find(_dbName);
-        //     if (it != m_openedDbs.end())
-        //         m_openedDbs.erase(it);
-        // }
     }
-    // ListOpenedDBs();
 }
 
 void DB::SQLiteBase::CreateAllObjects(bool checkAndCreate, bool toExecuteCommand) {
@@ -411,30 +343,6 @@ void CreateColumnDefinition(int *colDef, std::shared_ptr<wpSQLResultSet> rs, int
     }
 }
 
-#ifdef PPOS_DB
-int64_t DB::SQLiteBase::GetReturnData(std::shared_ptr<wpSQLResultSet> rs, PPOS::ReturnData *result, ConvertFunction fnConvert) {
-    int *colDef = new int[rs->GetColumnCount()];
-    memset(colDef, -1, rs->GetColumnCount());
-    for (int i = 0; i < rs->GetColumnCount(); i++) {
-        CreateColumnDefinition(colDef, rs, i);
-    }
-    int64_t nRows = 0;
-    try {
-        result->clear_row();
-        for (; rs->NextRow(); nRows++) {
-            auto row = result->add_row();
-            for (int i = 0; i < rs->GetColumnCount(); i++) {
-                std::string t = fnConvert(i, ConvertRowValue(colDef, rs, i));
-                row->add_column(t);
-            }
-        }
-    } catch (...) {
-        ShowLog("GetReturnData throw exception");
-    }
-    return nRows;
-}
-#endif
-
 std::string DB::SQLiteBase::GetResultTabDelimited(std::shared_ptr<wpSQLResultSet> rs, int nRows, bool useActualTab, bool showColHeader, const std::string &filename) {
     std::string delim0;
     std::string delim;
@@ -457,10 +365,6 @@ std::string DB::SQLiteBase::GetResultTabDelimited(std::shared_ptr<wpSQLResultSet
     for (int i = 0; i < rs->GetColumnCount(); i++) {
         CreateColumnDefinition(colDef, rs, i);
         if (showColHeader) {
-            // wxStringTokenizer tk(rs->GetColumnName(i), "@");
-            //*out << delim;
-            //*out << tk.GetNextToken();  // first one is the colname;
-            // delim = eofChar;
             std::string str {rs->GetColumnName(i)};
             boost::tokenizer<boost::char_separator<char>> tok(str, boost::char_separator<char>("@", "", boost::keep_empty_tokens));
             auto it = tok.begin();
@@ -509,8 +413,6 @@ std::vector<std::vector<std::string>> DB::SQLiteBase::GetVectorResult(std::share
         for (int i = 0; i < rs->GetColumnCount(); i++) {
             CreateColumnDefinition(colDef, rs, i);
             if (showColHeader) {
-                // wxStringTokenizer tk(rs->GetColumnName(i), "@");
-                // currentRow->emplace_back(tk.GetNextToken());  // first one is the colname;
                 std::string str {rs->GetColumnName(i)};
                 boost::tokenizer<boost::char_separator<char>> tok(str, boost::char_separator<char>("@", "", boost::keep_empty_tokens));
                 auto ttl = rs->GetColumnName(i);
@@ -528,123 +430,10 @@ std::vector<std::vector<std::string>> DB::SQLiteBase::GetVectorResult(std::share
         }
         delete[] colDef;
     } catch (...) {
-        ShowLog("GetVectorResult throw exception");
+        LOG_ERROR("GetVectorResult throw exception");
     }
     return result;
 }
-
-#ifdef __WX__
-
-static bool IsInteger(const std::string &str) {
-    for (std::string::const_iterator it = str.begin(); it != str.end(); it++) {
-        if (*it == '-' && it != str.begin()) return false;
-        if (!(std::isdigit(*it)))
-            return false;
-    }
-    return true;
-}
-
-static bool IsDecimal(const std::string &str) {
-    int noOfDots = 0;
-    for (std::string::const_iterator it = str.begin(); it != str.end(); it++) {
-        if (*it == '-' && it != str.begin()) return false;
-        if (*it == '.') {
-            if (++noOfDots > 1) return false;
-        }
-        if (!(std::isdigit(*it)))
-            return false;
-    }
-    return true;
-}
-
-//[MARGIN@decimal@f0]
-wxJSONValue DB::SQLiteBase::GetResultInJSON(std::shared_ptr<wpSQLResultSet> rs, std::unordered_map<std::string, std::function<std::string(std::shared_ptr<wpSQLResultSet>)>> functions) {
-    auto fnGetColName = [](const std::string &s, std::string &functionName) -> std::string {
-        wxStringTokenizer tok(s, "@");
-        std::string res;
-        for (int i = 0; tok.HasMoreTokens(); i++) {
-            std::string v(tok.GetNextToken());
-            if (i == 0)
-                res = v;
-            else if (i == 2)
-                functionName = v;
-        }
-        return res;
-    };
-
-    int *colDef = new int[rs->GetColumnCount()];
-    memset(colDef, -1, rs->GetColumnCount());
-    std::vector<std::string> colNames;
-    colNames.resize(rs->GetColumnCount());
-    std::vector<std::string> fnNameList;
-    fnNameList.resize(rs->GetColumnCount());
-    for (int i = 0; i < rs->GetColumnCount(); i++) {
-        CreateColumnDefinition(colDef, rs, i);
-        std::string fnName = "";
-        colNames[i] = fnGetColName(rs->GetColumnName(i), fnName);
-        fnNameList[i] = fnName;
-    }
-
-    wxJSONValue res;
-    while (rs->NextRow()) {
-        wxJSONValue row;
-        for (int i = 0; i < rs->GetColumnCount(); i++) {
-            std::string t = boost::trim_copy(ConvertRowValue(colDef, rs, i, functions[fnNameList[i]]));
-            if (!t.empty()) {
-                if (IsInteger(t))
-                    row[colNames[i]] = atoll(t.c_str());
-                else if (IsDecimal(t))
-                    row[colNames[i]] = String::ToDouble(t);
-                else
-                    row[colNames[i]] = t;
-            }
-        }
-        if (!row.IsNull())
-            res.Append(row);
-    }
-    delete[] colDef;
-    return res;
-}
-#endif
-
-// #ifndef NO_XLS
-//  void DB::SQLiteBase::GetResultForXCelsius(XMLTag &tg, std::shared_ptr<wpSQLResultSet> rs, const std::string &variableName) {
-//     if (tg.GetRoot() == NULL) {
-//         throw StringException("GetResultForXCelsius: XMLTag not initialized");
-//     }
-//     std::string res;
-//     //std::unordered_set<long> keyCodeCol;
-//     std::unordered_set<long> divFactor;
-//     std::unordered_set<long> dateColumns;
-//     std::unordered_set<long> yearColumns;
-//     std::unordered_set<long> monthColumns;
-//
-//     for (int i = 0; i < rs->GetColumnCount(); i++) {
-//         std::string colName = rs->GetColumnName(i);
-//         // if (colName.Contains("@keycode"))
-//         // 	keyCodeCol.insert(i);
-//         // else
-//         if (colName.Contains("@dividefactor"))
-//             divFactor.insert(i);
-//         else if (colName.Contains("@date"))
-//             dateColumns.insert(i);
-//         else if (colName.Contains("@year"))
-//             yearColumns.insert(i);
-//         else if (colName.Contains("@month"))
-//             monthColumns.insert(i);
-//     }
-//     wxXmlNode *n = tg.AddChild("variable");
-//     n->AddAttribute("name", variableName);
-//     while (rs->NextRow()) {
-//         wxXmlNode *r = XMLTag::AddChild(n, "row");
-//         for (int i = rs->GetColumnCount() - 1; i >= 0; i--) {
-//             wxXmlNode *col = XMLTag::AddChild(r, "column");
-//             std::string t = rs->Get(i);
-//             XMLTag::AddTextNode(col, "text", t.Trim().Trim(false));
-//         }
-//     }
-// }
-// #endif
 
 std::string DB::SQLiteBase::GetDayName(int i) {
     std::string v;
@@ -697,7 +486,7 @@ auto concat(sqlite3_context *ctx, int argc, sqlite3_value **data, const std::str
         }
         sqlite3_result_text(ctx, res.c_str(), -1, SQLITE_TRANSIENT);
     } catch (...) {
-        ShowLog("concat: throw exception");
+        LOG_ERROR("concat: throw exception");
     }
 }
 
@@ -715,7 +504,7 @@ auto getAgeInMonth(sqlite3_context *ctx, int argc, sqlite3_value **data) -> void
         auto months = std::chrono::duration_cast<std::chrono::months>(tn - t).count();
         sqlite3_result_double(ctx, months);
     } catch (...) {
-        ShowLog("getAgeInMonth: throw exception");
+        LOG_ERROR("getAgeInMonth: throw exception");
     }
 }
 auto fillZero(sqlite3_context *ctx, int /*argc*/, sqlite3_value **data) -> void {
@@ -730,7 +519,7 @@ auto fillZero(sqlite3_context *ctx, int /*argc*/, sqlite3_value **data) -> void 
             throw wpSQLException(fmt::format(" FillZero - length exceed required length: ({}, {}, {})", param, len, padLen), 0, 0);
         sqlite3_result_text(ctx, param.c_str(), -1, SQLITE_TRANSIENT);
     } catch (...) {
-        ShowLog("fillZero: throw exception");
+        LOG_ERROR("fillZero: throw exception");
     }
 }
 auto tokenizer(sqlite3_context *ctx, int argc, sqlite3_value **data) -> void {
@@ -756,7 +545,7 @@ auto tokenizer(sqlite3_context *ctx, int argc, sqlite3_value **data) -> void {
 
         sqlite3_result_text(ctx, v.c_str(), -1, SQLITE_TRANSIENT);
     } catch (...) {
-        ShowLog("tokenizer: throw exception");
+        LOG_ERROR("tokenizer: throw exception");
     }
 }
 
@@ -782,7 +571,7 @@ auto settoken(sqlite3_context *ctx, int argc, sqlite3_value **data) -> void {
 
         sqlite3_result_text(ctx, res.c_str(), -1, SQLITE_TRANSIENT);
     } catch (...) {
-        ShowLog("settoken: throw exception");
+        LOG_ERROR("settoken: throw exception");
     }
 }
 
@@ -806,7 +595,7 @@ auto getSequenceNo(sqlite3_context *ctx, int argc, sqlite3_value **data) -> void
         }
         sqlite3_result_int64(ctx, db->getSequence.seqNo + ofs);
     } catch (...) {
-        ShowLog("getSequenceNo: throw exception");
+        LOG_ERROR("getSequenceNo: throw exception");
     }
 }
 
@@ -819,7 +608,7 @@ auto getDayName(sqlite3_context *ctx, int argc, sqlite3_value **data) -> void {
         }
         sqlite3_result_text(ctx, db->GetDayName(sqlite3_value_int(data[0])).c_str(), -1, SQLITE_TRANSIENT);
     } catch (...) {
-        ShowLog("getDayName: throw exception");
+        LOG_ERROR("getDayName: throw exception");
     }
 }
 
@@ -831,9 +620,9 @@ auto setTimeZero(sqlite3_context *ctx, int argc, sqlite3_value **data) -> void {
             v = GetBeginOfDay(v);
         }
     } catch (std::bad_cast &e) {
-        ShowLog(fmt::format("setTimeZero: bad_cast --> {}", e.what()));
+        LOG_ERROR(fmt::format("setTimeZero: bad_cast --> {}", e.what()));
     } catch (...) {
-        ShowLog("setTimeZero: unknown exception");
+        LOG_ERROR("setTimeZero: unknown exception");
     }
     sqlite3_result_int64(ctx, to_number(v));
 }
@@ -859,7 +648,7 @@ auto formatNumber(sqlite3_context *ctx, int argc, sqlite3_value **data) -> void 
         std::string v = DB::SQLiteBase::FormatNumber(sqlite3_value_double(data[0]));
         sqlite3_result_text(ctx, v.c_str(), -1, SQLITE_TRANSIENT);
     } catch (...) {
-        ShowLog("formatNumber: throw exception");
+        LOG_ERROR("formatNumber: throw exception");
     }
 }
 
@@ -897,85 +686,12 @@ std::string DB::SQLiteBase::GetAllRows(const std::string &t, const std::string &
 }
 
 std::string DB::SQLiteBase::GetJSON(const std::string &sql) {
-    // wxJSONValue jval;
-    // GetSession().Execute(sql, [&jval](int argc, char **data, char **colNames) {
-    //     wxJSONValue v;
-    //     for (int i = 0; i < argc; i++, data++, colNames++) {
-    //         v[wxString::FromUTF8(*colNames)] = wxString::FromUTF8(*data);
-    //     }
-    //     jval.Append(v);
-    // });
-    // wxJSONWriter jwriter;
-    // wxString out;
-    // jwriter.Write(jval, out);
-    // return out;
     return "";
 }
 
 std::string DB::SQLiteBase::GetKeyValueJSON(const std::string &t, const std::string &sql) {
-    // if (!IsTableExist(t)) return "";
-    // wxJSONValue jval;
-    // GetSession().Execute(sql, [&jval](int argc, char **data, char ** /*colNames*/) {
-    //     if (argc >= 2) {
-    //         jval[wxString::FromUTF8(data[0])] = wxString::FromUTF8(data[1]);
-    //     }
-    // });
-    // wxJSONWriter jwriter;
-    // wxString out;
-    // jwriter.Write(jval, out);
-    // return out;
     return "";
 }
-
-#ifdef __WX__
-TableUpdateTimeSetter::TableUpdateTimeSetter(DB::SQLiteBase *odb, Synch::SyncTables ty) : db(odb) {
-    // sttInsert = db->GetSession().PrepareStatement(fmt::format("insert into {} (id, updateDate, syncDate) values(@id, @updateDate, @syncDate)", Synch::GetTableName(ty)));
-    // sttUpdate = db->GetSession().PrepareStatement(fmt::format("update {} set updateDate=@updateDate, syncDate=@syncDate where id=@id", Synch::GetTableName(ty)));
-    // sttFind = db->GetSession().PrepareStatement(fmt::format("select updateDate, syncDate from {} where id=@id", Synch::GetTableName(ty)));
-}
-
-void TableUpdateTimeSetter::SetUpdateDate(const std::string &id) {
-    // if (sttFind == nullptr) return;
-    // sttFind->Bind("@id", id);
-    // std::shared_ptr<wpSQLResultSet> rs = sttFind->ExecuteQuery();
-    // if (rs->NextRow()) {
-    //     wxDateTime syncDate = rs->Get<wxDateTime>(1);
-    //     sttUpdate->Bind("@id", id);
-    //     sttUpdate->Bind("@updateDate", wxDateTime::UNow());
-    //     if (syncDate.IsValid())
-    //         sttUpdate->Bind("@syncDate", syncDate);
-    //     else
-    //         sttUpdate->BindNull("@syncDate");
-    //     sttUpdate->ExecuteUpdate();
-    // } else {
-    //     sttInsert->Bind("@id", id);
-    //     sttInsert->Bind("@updateDate", wxDateTime::UNow());
-    //     sttInsert->BindNull("@syncDate");
-    //     sttInsert->ExecuteUpdate();
-    // }
-}
-
-void TableUpdateTimeSetter::SetSyncDate(const std::string &id, const wxDateTime &dt) {
-    // if (sttFind == nullptr) return;
-    // sttFind->Bind("@id", id);
-    // std::shared_ptr<wpSQLResultSet> rs = sttFind->ExecuteQuery();
-    // if (rs->NextRow()) {
-    //     wxDateTime updateDate = rs->Get<wxDateTime>(0);
-    //     sttUpdate->Bind("@id", id);
-    //     if (updateDate.IsValid())
-    //         sttUpdate->Bind("@updateDate", updateDate);
-    //     else
-    //         sttUpdate->BindNull("@updateDate");
-    //     sttUpdate->Bind("@syncDate", dt);
-    //     sttUpdate->ExecuteUpdate();
-    // } else {
-    //     sttInsert->Bind("@id", id);
-    //     sttInsert->Bind("@syncDate", dt);
-    //     sttInsert->BindNull("@updateDate");
-    //     sttInsert->ExecuteUpdate();
-    // }
-}
-#endif
 
 DB::Inserter::Inserter(wpSQLDatabase &_db, const std::string &findSQL, const std::string &insertSQL, const std::string &countThisIDstr, const std::string &getLastIDsql) : db(_db) {
     find = db.PrepareStatement(findSQL);
@@ -1026,76 +742,6 @@ std::shared_ptr<wpSQLStatement> DB::UserDBRegistry::GetInsertKeyStatement() { re
 std::shared_ptr<wpSQLStatement> DB::UserDBRegistry::GetLocalUpdateKeyStatement() { return sqlDB->IsTableExist("ul_localkeys") ? sqlDB->GetSession().PrepareStatement("update ul_LocalKeys set value=?, isDeleted=NULL where key = ?") : NULL; }
 std::shared_ptr<wpSQLStatement> DB::UserDBRegistry::GetLocalInsertKeyStatement() { return sqlDB->IsTableExist("ul_localkeys") ? sqlDB->GetSession().PrepareStatement("insert into ul_LocalKeys (key, value) values (?,?)") : NULL; }
 
-#ifdef __WX__
-std::shared_ptr<TableUpdateTimeSetter> DB::UserDBRegistry::CreateSyncUpdater() {
-    if (sqlDB->IsSynchAble()) {
-        return std::make_shared<TableUpdateTimeSetter>(sqlDB, Synch::UL_Keys);
-    } else {
-        return std::make_shared<TableUpdateTimeSetter>();  // null syncher
-    }
-}
-
-// all SetKey must run synchUpdate update timestamp;
-// which mean all insert and update muast know the ID of the ul_key;
-
-std::shared_ptr<TableUpdateTimeSetter> DB::UserDBRegistry::GetSyncUpdater() {
-    if (syncUpdater) return syncUpdater;
-    return (syncUpdater = CreateSyncUpdater());
-}
-#endif
-
-// this one should call PHarmaPOS registration server.
-bool DB::UserDBRegistry::IsActivated(const std::string &key) {
-    //if (!boost::equals(key, DB::softwareExtensionKey[DB::SoftwareExtensions::eInvoice])) return true;
-    std::string keyHere = GetLocalKey(key);
-    if (keyHere.empty()) return false;
-    std::string computedKey = sqlDB->GetActivationKey(key);
-    return boost::equals(keyHere, computedKey);
-}
-
-// std::vector<std::string> DB::UserDBRegistry::GetStringList(const std::string &key) {
-//     std::vector<std::string> res;
-//     std::string t = GetKey(key);
-//     if (t.empty()) return res;
-//     boost::tokenizer<boost::char_separator<char>> tok(t, boost::char_separator<char>("\n;", "", boost::keep_empty_tokens));
-//     for (auto &x : tok) {
-//         res.emplace_back(x);
-//     }
-//     return res;
-// }
-
-// std::vector<std::wstring> DB::UserDBRegistry::GetStringList(const std::wstring &key) {
-//     std::vector<std::wstring> res;
-//     std::string t = GetKey(String::to_string(key));
-//     if (t.empty()) return res;
-//     boost::tokenizer<boost::char_separator<char>> tok(t, boost::char_separator<char>("\n;", "", boost::keep_empty_tokens));
-//     for (auto &x : tok) {
-//         res.emplace_back(String::to_wstring(x));
-//     }
-//     return res;
-// }
-
-// std::vector<std::string> DB::UserDBRegistry::GetLocalStringList(const std::string &key) {
-//     std::vector<std::string> res;
-//     std::string t = GetLocalKey(key);
-//     if (t.empty()) return res;
-//     boost::tokenizer<boost::char_separator<char>> tok(t, boost::char_separator<char>("\n;", "", boost::keep_empty_tokens));
-//     for (auto &x : tok) {
-//         res.emplace_back(x);
-//     }
-//     return res;
-// }
-
-// std::vector<std::wstring> DB::UserDBRegistry::GetLocalStringList(const std::wstring &key) {
-//     std::vector<std::wstring> res;
-//     std::string t = GetLocalKey(String::to_string(key));
-//     if (t.empty()) return res;
-//     boost::tokenizer<boost::char_separator<char>> tok(t, boost::char_separator<char>("\n;", "", boost::keep_empty_tokens));
-//     for (auto &x : tok) {
-//         res.emplace_back(String::to_wstring(x));
-//     }
-//     return res;
-// }
 
 void DB::UserDBRegistry::EraseKey(const std::string &key) {
     std::shared_ptr<wpSQLStatement> stt = fn_sttEraseKey();
@@ -1106,9 +752,6 @@ void DB::UserDBRegistry::EraseKey(const std::string &key) {
     sttFind->Bind(1, key);
     std::shared_ptr<wpSQLResultSet> rs = sttFind->ExecuteQuery();
     if (!rs->NextRow()) return;
-#ifdef __WX__
-    GetSyncUpdater()->SetUpdateDate(rs->Get(0));
-#endif
     stt->Bind(1, key);
     stt->ExecuteUpdate();
 }
@@ -1212,7 +855,7 @@ bool TransactionDB::Migrate(DB::SQLiteBase *master, std::vector<std::string> &tL
         });
     }
     bool processed = false;
-    ShowLog("Migration from " + master->GetDBName() + " to " + GetDBName());
+    LOG_INFO("Migration from {} to {}", master->GetDBName(), GetDBName());
     for (auto const &tabName : tblList) {
         try {
             auto _x = GetSession().GetAutoCommitter();
@@ -1255,7 +898,7 @@ bool TransactionDB::Migrate(DB::SQLiteBase *master, std::vector<std::string> &tL
                     vals.append(")");
                     std::shared_ptr<wpSQLStatement> sttSel = master->GetSession().PrepareStatement(selSQL);
                     std::shared_ptr<wpSQLStatement> sttIns = GetSession().PrepareStatement(insSQL + vals);
-                    ShowLog("Migrating..." + tabName);
+                    LOG_INFO("Migrating...{} ", tabName);
                     rss = sttSel->ExecuteQuery();
                     while (rss->NextRow()) {
                         for (int i = 0; i < rss->GetColumnCount(); i++) {
@@ -1275,18 +918,18 @@ bool TransactionDB::Migrate(DB::SQLiteBase *master, std::vector<std::string> &tL
                     sttIns.reset();
                     tableToDrop.push_back(tabName);
                     processed = true;
-                    ShowLog("Migrating..." + tabName + " > ok");
+                    LOG_INFO("Migrating... {} > Ok", tabName);
                 }
             }
             _x->SetOK();
         } catch (wpSQLException &e) {
-            ShowLog("wpSQLException " + e.message);
+            LOG_ERROR("wpSQLException {}", e.message);
             return false;
         } catch (std::exception &e) {
-            ShowLog(std::string("std::exception ") + e.what());
+            LOG_ERROR("std::exception {}", e.what());
             return false;
         }
     }
-    ShowLog("Migration from " + master->GetDBName() + " to " + GetDBName() + " completed.");
+    LOG_INFO("Migration from {} to {} completed.", master->GetDBName(), GetDBName());
     return processed;
 }

@@ -1,10 +1,7 @@
 #pragma once
-#include <sqlite3.h>
+#include "sqlite3.h"
 #include <type_traits>
 #include <fmt/format.h>
-#include <boost/uuid/uuid.hpp>
-#include <boost/uuid/nil_generator.hpp>
-#include <boost/make_shared.hpp>
 #include <chrono>
 #include <sstream>
 #include <iomanip>
@@ -13,24 +10,16 @@
 #include <string_view>
 #include <codecvt>
 #include <locale>
+#include <boost/algorithm/string.hpp>
+//#include <boost/json.hpp>
 #include <boost/locale.hpp>
+#include <boost/make_shared.hpp>
+#include <boost/tokenizer.hpp>
+#include <boost/uuid/nil_generator.hpp>
+#include <boost/uuid/uuid.hpp>
+#include <boost/uuid/uuid_io.hpp>
 #include "timefunctions.h"
-
-#ifdef PPOS_DB
-#include <words.h>
-#else
-#ifndef __WX__
-#define EOFFIELDCHAR char(0x1E)
-#define EOLINECHAR char(0x1F)
-
-constexpr char attributeMark = '\t';
-constexpr char valueMark = '\n';
-
-inline auto GetAttributeMark() { return std::string(1, attributeMark); }
-inline auto GetValueMark() { return std::string(1, valueMark); }
-
-#endif
-#endif
+#include "ulid.hpp"
 
 constexpr auto wpDATEFORMAT = "%d-%m-%Y";
 constexpr auto wpDATEFORMATLONG = "%a %d-%b-%Y";
@@ -44,33 +33,7 @@ using namespace std::chrono_literals;
 
 typedef std::chrono::system_clock::time_point TimePoint;
 
-// #ifndef __LOCALE_CONV
-// #define __LOCALE_CONV
-// template<typename T>
-// inline std::wstring to_wstring(const T &s) {
-//     return boost::locale::conv::utf_to_utf<wchar_t>(s);
-// }
-
-// template<typename T>
-// inline std::string to_string(const T &s) {
-//     return boost::locale::conv::utf_to_utf<char>(s);
-// }
-
-// inline std::wstring to_wstring(const std::string &s) {
-//     return boost::locale::conv::utf_to_utf<wchar_t>(s);
-// }
-
-// inline std::string to_utf_string(const std::string &s) {
-//     return boost::locale::conv::utf_to_utf<char>(s);
-// }
-
-// inline std::string to_utf_string(const std::wstring &s) {
-//     return boost::locale::conv::utf_to_utf<char>(s);
-// }
-// #endif
-
-template<typename T>
-std::wstring to_wstring(const T &v) {
+template<typename T> std::wstring to_wstring(const T &v) {
     if constexpr (std::is_same_v<T, std::string>)
         return boost::locale::conv::utf_to_utf<wchar_t>(v);
     else if constexpr (std::is_same_v<T, std::wstring>)
@@ -83,8 +46,7 @@ std::wstring to_wstring(const T &v) {
         return std::to_wstring(v);
 }
 
-template<typename T>
-std::string to_string(const T &v) {
+template<typename T> std::string to_string(const T &v) {
     if constexpr (std::is_same_v<T, std::string>)
         return v;
     else if constexpr (std::is_same_v<T, std::wstring>)
@@ -99,15 +61,13 @@ std::string to_string(const T &v) {
         return fmt::format("{}", v);
 }
 
-extern std::string BuildFTSSearch(const std::string& param);
+extern std::string BuildFTSSearch(const std::string &param);
 
-template<class T, class... Args>
-T from_chars(const std::string &s, Args... args) {
+template<class T, class... Args> T from_chars(const std::string &s, Args... args) {
     const char *end = s.begin() + s.size();
     T number;
     auto result = std::from_chars(s.begin(), end, number, args...);
-    if (result.ec != std::errc {} || result.ptr != end)
-        throw std::runtime_error("Cannot convert to number");
+    if (result.ec != std::errc {} || result.ptr != end) throw std::runtime_error("Cannot convert to number");
     return number;
 }
 
@@ -118,19 +78,12 @@ inline auto TimePointMin() { return std::chrono::time_point<std::chrono::system_
 
 inline auto InvalidTimePoint() { return std::chrono::system_clock::time_point::min(); }
 
-inline bool IsInValidTimePoint(const TimePoint &t) {
-    return t == std::chrono::system_clock::time_point::min();
-}
-inline bool IsValidTimePoint(const TimePoint &t) {
-    return t > std::chrono::system_clock::time_point::min();
-}
+inline bool IsInValidTimePoint(const TimePoint &t) { return t == std::chrono::system_clock::time_point::min(); }
+inline bool IsValidTimePoint(const TimePoint &t) { return t > std::chrono::system_clock::time_point::min(); }
 
-inline void InvalidateTimePoint(TimePoint &t) {
-    t = std::chrono::system_clock::time_point::min();
-}
+inline void InvalidateTimePoint(TimePoint &t) { t = std::chrono::system_clock::time_point::min(); }
 
-template<typename T>
-auto to_number(const std::string &s) {
+template<typename T> auto to_number(const std::string &s) {
     if constexpr (std::is_same_v<T, long long>)
         return std::atoll(s.c_str());
     else if constexpr (std::is_same_v<T, long>)
@@ -149,9 +102,7 @@ auto to_number(const std::string &s) {
         return std::atoi(s.c_str());
 }
 
-
-template<typename T>
-auto to_number(std::string_view s) {
+template<typename T> auto to_number(std::string_view s) {
     if constexpr (std::is_same_v<T, long long>) {
         long long x = 0;
         std::from_chars(s.data(), s.data() + s.length(), x);
@@ -185,8 +136,7 @@ auto to_number(std::string_view s) {
     }
 }
 
-template<typename T>
-auto to_chrono(const T &t) {
+template<typename T> auto to_chrono(const T &t) {
     if constexpr (std::is_same_v<T, int64_t>)
         return TimePoint(std::chrono::milliseconds(t));
     else if constexpr (std::is_same_v<T, std::string>)
@@ -197,44 +147,15 @@ auto to_chrono(const T &t) {
 
 std::string FormatDate(const std::chrono::system_clock::time_point &tp, const char *format = "%F %T %Z");
 
-inline std::string FormatTime(const std::chrono::system_clock::time_point &tp, const char *format = "%H:%M:%S") {
-    return FormatDate(tp, format);
-}
+inline std::string FormatTime(const std::chrono::system_clock::time_point &tp, const char *format = "%H:%M:%S") { return FormatDate(tp, format); }
 
 std::string FormatDateUTC(const std::chrono::system_clock::time_point &tp, const char *format);
 
-extern std::tuple<bool, std::string> json_beautify(const std::string compact_json_string, int indent=4);
+extern std::tuple<bool, std::string> json_beautify(const std::string compact_json_string, int indent = 4);
 
-template<typename T>
-static int to_integer(const T &str) {
-    return str.empty() ? 0 : std::stoi(str);
-}
+template<typename T> static int to_integer(const T &str) { return str.empty() ? 0 : std::stoi(str); }
 
-template<typename T>
-static double to_double(const T &str) {
-    return str.empty() ? 0.0 : std::stod(str);
-}
-
-
-/* -- calculating age in year/month/day.
-  auto dob = std::chrono::sys_days{1962y / 11 / 28};
-  std::cout << "dob = " << FormatDate(dob) << std::endl;
-
-  TimePoint tn = TimePoint::clock::now();
-  auto numOfdays = std::chrono::duration_cast<std::chrono::days>(tn - dob).count();
-  auto numOfnmonth = std::chrono::duration_cast<std::chrono::months>(tn - dob).count();
-  auto numOfyear = std::chrono::duration_cast<std::chrono::years>(tn - dob).count();
-
-  std::cout << fmt::format("Dob = {}: age = {} year, {} month, {} days", FormatDate(dob), nyear, nmonth, ndays) << std::endl;
-
-  auto age = tn - dob;
-  auto ageInyear = std::chrono::floor<std::chrono::years>(age);
-  auto ageMonth = std::chrono::floor<std::chrono::months>(age - ryear);
-  auto ageDay = std::chrono::floor<std::chrono::days>(age - ryear - rmonth);
-
-  std::cout << fmt::format("Age {} years, {} months and {} days", ageInyear.count(), ageMonth.count(), ageDay.count()) << std::endl;
-
-*/
+template<typename T> static double to_double(const T &str) { return str.empty() ? 0.0 : std::stod(str); }
 
 constexpr int64_t googleTSfactor = 1000000;
 inline int64_t get_int_value(const google::protobuf::Timestamp &v) { return v.seconds() * 1000 + v.nanos() / googleTSfactor; }
@@ -258,7 +179,6 @@ struct wpSQLException {
 
 public:
     wpSQLException(const std::string m, int rc_, sqlite3 *db);
-    //    std::string GetMessage() const { return message; }
 };
 
 class wpSQLManager {
@@ -277,12 +197,9 @@ class wpSQLStatementManager {
 
 public:
     wpSQLStatementManager() : stmt(NULL) {}
-    wpSQLStatementManager(std::shared_ptr<wpSQLManager> d, sqlite3_stmt *s) : db(d),
-                                                                              stmt(s) {}
+    wpSQLStatementManager(std::shared_ptr<wpSQLManager> d, sqlite3_stmt *s) : db(d), stmt(s) {}
     ~wpSQLStatementManager() {
-        if (stmt) {
-            sqlite3_finalize(stmt);
-        }
+        if (stmt) { sqlite3_finalize(stmt); }
         stmt = NULL;
     }
     sqlite3_stmt *GetStatement() { return stmt; }
@@ -316,36 +233,13 @@ public:
         len = sqlite3_column_bytes(stmt->GetStatement(), i);
         return (const unsigned char *)sqlite3_column_blob(stmt->GetStatement(), i);
     }
-    template<typename T = std::string>
-    T Get(int i, const T &defaultValue = T {}) const {
+    template<typename T = std::string> T Get(int i, const T &defaultValue = T {}) const {
         if constexpr (std::is_same_v<T, long long>) {
             if (GetColumnType(i) == SQLITE_NULL) return defaultValue;
             return sqlite3_column_int64(stmt->GetStatement(), i);
         } else if constexpr (std::is_same_v<T, int64_t>) {
             if (GetColumnType(i) == SQLITE_NULL) return defaultValue;
             return sqlite3_column_int64(stmt->GetStatement(), i);
-#ifdef __WX__
-        } else if constexpr (std::is_same_v<T, wxLongLong>) {
-            if (GetColumnType(i) == SQLITE_NULL) return defaultValue;
-            return wxLongLong(sqlite3_column_int64(stmt->GetStatement(), i));
-        } else if constexpr (std::is_same_v<T, wxMemoryBuffer>) {
-            wxMemoryBuffer buffer;
-            if (GetColumnType(i) == SQLITE_NULL) return buffer;
-            int len = sqlite3_column_bytes(stmt->GetStatement(), i);
-            const void *blob = sqlite3_column_blob(stmt->GetStatement(), i);
-            buffer.AppendData((void *)blob, (size_t)len);
-            return buffer;
-        } else if constexpr (std::is_same_v<T, wxDateTime>) {
-            if (GetColumnType(i) == SQLITE_NULL) return wxInvalidDateTime;
-            wxLongLong value = wxLongLong(sqlite3_column_int64(stmt->GetStatement(), i));
-            return wxDateTime(value);
-        } else if constexpr (std::is_same_v<T, wxDateTime::wxDateTime_t>) {
-            if (GetColumnType(i) == SQLITE_NULL) return wxInvalidDateTime;
-            return static_cast<wxDateTime::wxDateTime_t>(sqlite3_column_int(stmt->GetStatement(), i));
-        } else if constexpr (std::is_same_v<T, wxString>) {
-            if (GetColumnType(i) == SQLITE_NULL) return defaultValue;
-            return reinterpret_cast<const char *>(sqlite3_column_text(stmt->GetStatement(), i));
-#endif
         } else if constexpr (std::is_same_v<T, int>) {
             if (GetColumnType(i) == SQLITE_NULL) return defaultValue;
             return sqlite3_column_int(stmt->GetStatement(), i);
@@ -361,6 +255,9 @@ public:
         } else if constexpr (std::is_same_v<T, TimePoint>) {
             auto value = (GetColumnType(i) == SQLITE_NULL) ? epochNull_ms : sqlite3_column_int64(stmt->GetStatement(), i);
             return to_chrono(value);
+        } else if constexpr (std::is_same_v<T, ULID>) {
+            auto value = (GetColumnType(i) == SQLITE_NULL) ? ULID::empty : ULID(reinterpret_cast<const uint8_t *>(sqlite3_column_blob(stmt->GetStatement(), i)));
+            return value;
         } else if constexpr (std::is_same_v<T, boost::uuids::uuid>) {
             if (GetColumnType(i) == SQLITE_NULL) return boost::uuids::nil_uuid();
             int len = sqlite3_column_bytes(stmt->GetStatement(), i);
@@ -393,10 +290,7 @@ private:
     void Reset();
     wpSQLStatement();  // not defined - should not be used.
 public:
-    wpSQLStatement(std::shared_ptr<wpSQLStatementManager> s) : stmt(s),
-                                                               needReset(false) { pSQL = sqlite3_sql(stmt->GetStatement()); }
-    // virtual ~wpSQLStatement() { sqlite3_finalize(stmt); }
-
+    wpSQLStatement(std::shared_ptr<wpSQLStatementManager> s) : stmt(s), needReset(false) { pSQL = sqlite3_sql(stmt->GetStatement()); }
     int GetParamCount() const { return sqlite3_bind_parameter_count(stmt->GetStatement()); }
     int GetParamIndex(const std::string &name, bool throwIfError = false) const;
     std::string GetParamName(int i) const { return sqlite3_bind_parameter_name(stmt->GetStatement(), i); }
@@ -405,37 +299,19 @@ public:
     std::shared_ptr<wpSQLResultSet> ExecuteQuery() { return Execute(); }
     int ExecuteUpdate();
 
-    template<typename T = int64_t>
-    T ExecuteScalar() {
+    template<typename T = int64_t> T ExecuteScalar() {
         needReset = true;
         std::shared_ptr<wpSQLResultSet> rs = ExecuteQuery();
         T value {};
-        while (rs->NextRow())
-            value += rs->Get<T>(0);
+        while (rs->NextRow()) value += rs->Get<T>(0);
         return value;
     }
 
-    template<typename T>
-    void Bind(int idx, const T &val) {
+    template<typename T> void Bind(int idx, const T &val) {
         if (needReset) Reset();
         int rc;
         if constexpr (std::is_same_v<T, int64_t>)
             rc = sqlite3_bind_int64(stmt->GetStatement(), idx, val);
-#ifdef __WX__
-        else if constexpr (std::is_same_v<T, wxLongLong>)
-            rc = sqlite3_bind_int64(stmt->GetStatement(), idx, val.GetValue());
-        else if constexpr (std::is_same_v<T, wxMemoryBuffer>)
-            rc = sqlite3_bind_blob(stmt->GetStatement(), idx, (const void *)val.GetData(), (int)(val.GetDataLen()), nullptr);
-        else if constexpr (std::is_same_v<T, wxDateTime>) {
-            if (val.IsValid())
-                rc = sqlite3_bind_int64(stmt->GetStatement(), idx, val.GetValue().GetValue());
-            else
-                rc = sqlite3_bind_null(stmt->GetStatement(), idx);
-        } else if constexpr (std::is_same_v<T, wxDateTime::wxDateTime_t>)
-            rc = sqlite3_bind_int(stmt->GetStatement(), idx, static_cast<unsigned short>(val));
-        else if constexpr (std::is_same_v<T, wxString>)
-            rc = sqlite3_bind_text(stmt->GetStatement(), idx, val.data(), -1, SQLITE_TRANSIENT);  // sqlite_transient - sqlite use internal mem
-#endif
         else if constexpr (std::is_same_v<T, long>)
             rc = sqlite3_bind_int(stmt->GetStatement(), idx, val);
         else if constexpr (std::is_same_v<T, long long>)
@@ -451,26 +327,25 @@ public:
         } else if constexpr (std::is_same_v<T, google::protobuf::Timestamp>) {
             auto iv = get_int_value(val);
             rc = (iv == epochNull_ms) ? sqlite3_bind_null(stmt->GetStatement(), idx) : sqlite3_bind_int64(stmt->GetStatement(), idx, iv);
-        }
-        else if constexpr (std::is_same_v<T, boost::uuids::uuid>)
+        } else if constexpr (std::is_same_v<T, boost::uuids::uuid>)
             rc = sqlite3_bind_blob(stmt->GetStatement(), idx, (const void *)val.data, (int)(val.size()), nullptr);
         else if constexpr (std::is_same_v<T, char *>)
             rc = sqlite3_bind_text(stmt->GetStatement(), idx, val, -1, SQLITE_TRANSIENT);  // sqlite_transient - sqlite use internal mem
         else if constexpr (std::is_same_v<T, std::string>)
             rc = sqlite3_bind_text(stmt->GetStatement(), idx, val.c_str(), -1, SQLITE_TRANSIENT);  // sqlite_transient - sqlite use internal mem
-        else if constexpr (std::is_same_v<T, std::wstring>) {
+        else if constexpr (std::is_same_v<T, ULID>) {
+            rc = sqlite3_bind_blob(stmt->GetStatement(), idx, (const void *)val.data(), val.size(), SQLITE_TRANSIENT);
+        } else if constexpr (std::is_same_v<T, std::pair<const uint8_t*, size_t>>) {
+            rc = sqlite3_bind_blob(stmt->GetStatement(), idx, (const void *)val.first, (int)(val.second), SQLITE_TRANSIENT);
+        } else if constexpr (std::is_same_v<T, std::wstring>) {
             auto converted = to_string(val);
             rc = sqlite3_bind_text(stmt->GetStatement(), idx, converted.c_str(), -1, SQLITE_TRANSIENT);  // sqlite_transient - sqlite use internal mem
         } else
             rc = sqlite3_bind_text(stmt->GetStatement(), idx, val, -1, nullptr);  // nullptr -> sqlite won't copy/delete mem
-        if (rc != SQLITE_OK)
-            throw wpSQLException("cannot bind: ", rc, stmt->GetSQLite3());
+        if (rc != SQLITE_OK) throw wpSQLException("cannot bind: ", rc, stmt->GetSQLite3());
     }
 
-    template<typename T>
-    void Bind(const std::string &paramName, const T &v) {
-        Bind(GetParamIndex(paramName, true), v);
-    }
+    template<typename T> void Bind(const std::string &paramName, const T &v) { Bind(GetParamIndex(paramName, true), v); }
 
     void Bind(int idx, const unsigned char *val, int len) {
         if (needReset) Reset();
@@ -497,6 +372,8 @@ public:
     virtual ~wpAutoCommitter();
 };
 
+enum OpenMode { ReadOnly, ReadWrite };
+
 class wpSQLDatabase {
     std::shared_ptr<wpSQLManager> db;
 
@@ -511,14 +388,9 @@ public:
         if (IsOpen()) sqlite3_interrupt(GetDB());
     }
     bool IsInTransaction() { return !IsAutoCommit(); }
-    template<typename T = int64_t>
-    T GetLastRowId() {
+    template<typename T = int64_t> T GetLastRowId() {
         if constexpr (std::is_same_v<T, std::string>)
             return IsOpen() ? std::to_string(sqlite3_last_insert_rowid(GetDB())) : "0";
-#ifdef __WX__
-        else if constexpr (std::is_same_v<T, wxString>)
-            return IsOpen() ? std::to_string(sqlite3_last_insert_rowid(GetDB())) : "0";
-#endif
         else
             return IsOpen() ? sqlite3_last_insert_rowid(GetDB()) : 0;
     }
@@ -535,13 +407,10 @@ public:
     bool HasUniqueKey(const std::string &tabName);
     bool HasPrimaryKey(const std::string &tabName);
 
-    template<typename T = int64_t>
-    T ExecuteScalar(const std::string &sql) {
+    template<typename T = int64_t> T ExecuteScalar(const std::string &sql) {
         T v {};
         Execute(sql, [&v](int /*argc*/, char **val, char **) {
-            if (val && val[0]) {
-                v += to_number<T>(std::string_view(val[0]));
-            }
+            if (val && val[0]) { v += to_number<T>(std::string_view(val[0])); }
         });
         return v;
     }
@@ -552,11 +421,8 @@ public:
     int ExecuteUpdate(const std::string &sql) { return Execute(sql, nullptr); }
     std::shared_ptr<wpSQLResultSet> ExecuteQuery(const std::string &sql) { return Execute(sql); }
 
-    void Open(const std::string &fileName, int ms_waitLock = 60000);  // 1 minute
+    void Open(const std::string &fileName, OpenMode mode = OpenMode::ReadWrite);  // 1 minute
     sqlite3 *GetDB() { return db ? db->GetSQLite3() : NULL; }
-    // virtual ~wpSQLDatabase() {
-    //	if (db) { sqlite3_close_v2(db); } // closed even with active rowset/statement;
-    // }
     void Close() { db.reset(); }
 
     bool TableExists(const std::string &tableName, const std::string &databaseName = "");

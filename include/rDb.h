@@ -1,43 +1,21 @@
 #pragma once
-#ifndef NO_XLS
-#include "libxl.h"
-class ExcelReader;
-#endif
-#include <string>
 #include <boost/algorithm/string.hpp>
-#include <boost/tokenizer.hpp>
 #include <boost/json.hpp>
-#include "guid.h"
-#include "net.h"
-#include "logger.h"
+#include <boost/range/join.hpp>
+#include <boost/tokenizer.hpp>
+#include <string>
+#include "logging.hpp"
 #include "wpSQLDatabase.h"
 
 using ConvertFunction = std::function<std::string(int, const std::string &)>;
+
+constexpr char EOFFIELDCHAR = 0x1E;
+constexpr char EOLINECHAR = 0x1F;
 
 namespace DB {
     class SQLiteBase;
 }
 
-#ifdef __WX__
-#include "guid.h"
-#include "sqlexception.h"
-#include "xmlParser.h"
-#include "events.h"
-
-class TableUpdateTimeSetter {
-    std::shared_ptr<wpSQLStatement> sttInsert, sttUpdate;
-    std::shared_ptr<wpSQLStatement> sttFind;
-    DB::SQLiteBase *db;
-
-public:
-    TableUpdateTimeSetter() = default;
-    TableUpdateTimeSetter(DB::SQLiteBase *db, Synch::SyncTables type);
-    void SetUpdateDate(const std::string &id);
-    void SetSyncDate(const std::string &id, const wxDateTime &dt = wxDateTime::UNow());
-};
-#endif
-
-class ReportPDF;
 class TransactionDB;
 
 namespace DB {
@@ -50,23 +28,14 @@ namespace DB {
         return std::wstring(joined.begin(), joined.end());
     }
 
-    template<typename T, typename V>
-    bool contains(T list, V value) {
+    template<typename T, typename V> bool contains(T list, V value) {
         for (auto x : list) {
             if (x == value) return true;
         }
         return false;
     }
 
-    enum ObjectType { EOT,
-        Table,
-        Function,
-        Procedure,
-        View,
-        Index,
-        Command,
-        Constraint,
-        Trigger };
+    enum ObjectType { EOT, Table, Function, Procedure, View, Index, Command, Constraint, Trigger };
 
     struct DBObjects {
         std::string objectName;
@@ -75,18 +44,9 @@ namespace DB {
 
     public:
         DBObjects() = default;
-        DBObjects(const std::string &oName, const ObjectType &objType, const std::vector<std::string> &crSQL) noexcept
-          : objectName(oName),
-            objectType(objType),
-            createSQL(crSQL) {}
-        DBObjects(const DBObjects &r) noexcept
-          : objectName(r.objectName),
-            objectType(r.objectType),
-            createSQL(r.createSQL) {}
-        DBObjects(DBObjects &&r) noexcept
-          : objectName(std::move(r.objectName)),
-            objectType(std::move(r.objectType)),
-            createSQL(std::move(r.createSQL)) {}
+        DBObjects(const std::string &oName, const ObjectType &objType, const std::vector<std::string> &crSQL) noexcept : objectName(oName), objectType(objType), createSQL(crSQL) {}
+        DBObjects(const DBObjects &r) noexcept : objectName(r.objectName), objectType(r.objectType), createSQL(r.createSQL) {}
+        DBObjects(DBObjects &&r) noexcept : objectName(std::move(r.objectName)), objectType(std::move(r.objectType)), createSQL(std::move(r.createSQL)) {}
         DBObjects &operator=(DBObjects &r) noexcept {
             objectName = r.objectName;
             objectType = r.objectType;
@@ -103,75 +63,10 @@ namespace DB {
         }
     };
 
-#ifdef __USE_MSSQL__
-    class Base {
-        //		DBInitializer *initializer;
-        std::vector<SQLCommand::Simple *> commandList;
-
-    protected:
-        DBServer::MsSQL *ds;
-        WorkUnit::MsSQLSession *session;
-        bool isOpened;
-
-        std::string _dbName;
-        std::string _userID;
-        std::string _password;
-        std::string _serverName;
-        std::string _masterName;   // for some view <MASTER>
-        std::string _siblingName;  // for some view <SIBLING>
-
-        bool _useIntegratedSecurity;
-        bool _dropAllObjects;
-        virtual std::vector<DBObjects> GetObjectList() { return std::vector<DBObjects> {}; }
-        virtual void LoadDBAttributes() {}
-        virtual bool Create();
-
-    public:
-        Base(const std::string &serverName, const std::string &dbName);
-        virtual ~Base();
-        bool IsOpened() { return isOpened && ds; }
-        void Close();
-        void SetUser(const std::string &userId, const std::string &password);
-        void ReCreateObjects() { _dropAllObjects = true; }
-        void SetRelatedDB(const std::string &master, const std::string &sibling) {
-            _masterName = master;
-            _siblingName = sibling;
-        }
-        virtual void Open(bool checkAndCreate = true);
-        static void Initialize();
-        static void UnInitialize();
-        void RegisterCommand(SQLCommand::Simple *p) {
-            commandList.emplace_back(p);
-            if (!p->IsPrepared()) p->Prepare();
-        }
-        void CancelCommand(DWORD tid) {
-            if (session) session->CancelCommand(tid);
-        }
-        virtual DBServer::MsSQL *GetServer() { return ds; }
-        virtual WorkUnit::Session *GetSession() { return session; }
-        IDBInitialize *GetIDBInitialize() { return ds->pIDBInitialize; }
-        const std::string GetDBName() const { return _dbName; }
-        const std::string GetServerName() const { return _serverName; }
-        const std::string GetUserID() const { return _userID; }
-        const std::string GetPassword() const { return _password; }
-        bool IsDataBaseExist(const std::string &s, bool toCreate = false);
-        virtual void PopulateTables() {}
-    };
-#endif
-
     class UserDBRegistry;
     class SQLiteBase;
 
-#ifndef NO_REPORT
-#ifndef NO_XLS
-    typedef libxl::Sheet *(SQLiteBase::*XLSGeneratorFunction)(ExcelReader *xlr, libxl::Sheet *sheet, std::shared_ptr<ReportPDF> rep, std::shared_ptr<wpSQLResultSet> rs, wxJSONValue &param, bool freezeHeader);
-#else
-    typedef void (SQLiteBase::*XLSGeneratorFunction)(std::shared_ptr<ReportPDF> rep, std::shared_ptr<wpSQLResultSet> rs, wxJSONValue &param, bool freezeHeader);
-#endif
-#endif
     class SQLiteBase {
-        std::string _empty;
-        // these two is used for computing sequence no
     public:
         struct GetSequence {
             int64_t seqNo;
@@ -198,13 +93,13 @@ namespace DB {
         std::string _pathName;
         std::string mainDBname;
         bool isAggregatedDB;
+        OpenMode openMode {OpenMode::ReadOnly};
 
         std::shared_ptr<wpSQLDatabase> db;
         bool dropAllObjects;
         bool isNewDatabase;
         virtual std::vector<DBObjects> objectList() const { return std::vector<DBObjects> {}; }  // returns a copy of emptyObject;
         virtual bool Create();
-
     private:
         void CreateObject(const std::string &f, const DB::ObjectType ty, const std::vector<std::string> crSQL, bool dropIfExist = false, const std::string &replMaster = "", const std::string &replSibling = "");
         void CreateAllObjects(bool checkAndCreate, bool toExecuteCommand);
@@ -235,14 +130,11 @@ namespace DB {
         void DropAllTables();
         bool BackupDB(int noOfBackupToKeep, std::string folderName, std::function<bool()> fnIsStopping) const;
 
-        // wxLongLong InsertIfNotExists(wpSQLStatement &sttFind, wpSQLStatement &sttInsert, long id, const std::string &code, const std::string &name);
-        // wxLongLong InsertIfNotExists(wpSQLStatement &sttFind, wpSQLStatement &sttInsert, const std::string &code, const std::string &name);
         wpSQLDatabase &GetSession() { return *db.get(); }
         std::shared_ptr<wpSQLDatabase> Get() { return db; }
         const std::string GetServerName() const { return "local"; }
 
-        virtual void Open(bool checkAndCreate = false);
-        virtual void OpenWithoutSession() { Open(true); }
+        virtual void Open(bool checkAndCreate = false, OpenMode mode = OpenMode::ReadWrite);
         virtual void CheckSchemaAndRestructure();
         virtual void PopulateTables() {}
         virtual void CheckStructure() {}
@@ -257,34 +149,9 @@ namespace DB {
         std::string GetKeyValueJSON(const std::string &tableName, const std::string &sql);
         std::string GetJSON(const std::string &sql);
 
-        virtual std::string GetDatabaseIdentity();
-        static std::string GetDatabaseIdentity(const std::string &extraInfo, const std::string &m, const std::string &t) { return GetShortHashedString(fmt::format("{}~{}~{}", extraInfo, boost::to_upper_copy(m), boost::to_upper_copy(t))); }
-        std::string GetActivationKey(const std::string &key) { return DB::GetActivationKey(GetDatabaseIdentity(), key); }
-        std::string GetAccountingActivationKey() { return GetActivationKey(DB::softwareExtensionKey[DB::SoftwareExtensions::accounting]); }
-        std::string GetTicketingActivationKey() { return GetActivationKey(DB::softwareExtensionKey[DB::SoftwareExtensions::ticketing]); }
-        std::string GetCateringActivationKey() { return GetActivationKey(DB::softwareExtensionKey[DB::SoftwareExtensions::catering]); }
-        std::string GetOnlineActivationKey() { return GetActivationKey(DB::softwareExtensionKey[DB::SoftwareExtensions::online]); }
-        std::string GetOnlineMarketPlaceActivationKey() { return GetActivationKey(DB::softwareExtensionKey[DB::SoftwareExtensions::onlineMarketPlace]); }
-        std::string GetRentalActivationKey() { return GetActivationKey(DB::softwareExtensionKey[DB::SoftwareExtensions::rental]); }
-        std::string GetStockTrackingActivationKey() { return GetActivationKey(DB::softwareExtensionKey[DB::SoftwareExtensions::stockTracking]); }
-        std::string GetMyKadActivationKey() { return GetActivationKey(DB::softwareExtensionKey[DB::SoftwareExtensions::mykad]); }
-        std::string GetBackupActivationKey() { return GetActivationKey(DB::softwareExtensionKey[DB::SoftwareExtensions::backup]); }
-        std::string GetDispensingActivationKey() { return GetActivationKey(DB::softwareExtensionKey[DB::SoftwareExtensions::dispensing]); }
-        std::string GetPatientRecordActivationKey() { return GetActivationKey(DB::softwareExtensionKey[DB::SoftwareExtensions::patientRecord]); }
-        std::string Get_eInvoiceActivationKey() { return GetActivationKey(DB::softwareExtensionKey[DB::SoftwareExtensions::eInvoice]); }
-
-#ifdef HAS_EXPIRY
-        virtual void SetSoftwareExpiry(wxDateTime &) {}
-        virtual void ResetSoftwareExpiry() {}
-        virtual bool IsSoftwareExpired() {
-            wxDateTime t = GetSoftwareExpiryDate();
-            return t.IsValid() ? t < GetServerNow() : false;
-        }
-        virtual wxDateTime GetSoftwareExpiryDate() { return GetServerNow().Add(wxDateSpan(1)); }
-#endif
         void CancelCommand() { db->Interrupt(); }
         const std::string GetDBName() const { return _dbName; }
-        virtual const std::string GetTransactionDBName() const { return _empty; }
+        virtual const std::string GetTransactionDBName() const { return ""; }
         virtual std::shared_ptr<TransactionDB> GetTransactionDB();
         const std::string GetDBPath() const { return _pathName; }
         void SetDBName(const std::string &n) { _dbName = n; }
@@ -313,38 +180,14 @@ namespace DB {
         std::string GetDayName(int i);
         std::string GetMonthName(int i);
 
-#ifndef NO_REPORT
-        virtual DB::XLSGeneratorFunction GetProcessor(const std::string &cmdLine, wxJSONValue &param);
-#ifndef NO_XLS
-        virtual libxl::Sheet *CreateNewSheet(ExcelReader *xlr, int nCols, const std::string &sheetName, const std::string &title, const std::string &subTitle);
-        virtual libxl::Sheet *AppendToExcelSheet(ExcelReader *xlr, libxl::Sheet *sheet, std::shared_ptr<ReportPDF>, std::shared_ptr<wpSQLResultSet> rs, wxJSONValue &param, bool freezeHeader);
-        virtual libxl::Sheet *AppendToPDF(ExcelReader *xlsReader, libxl::Sheet *sheet, std::shared_ptr<ReportPDF> report, std::shared_ptr<wpSQLResultSet> rs, wxJSONValue &param, bool freezeHeader);
-        virtual libxl::Sheet *AppendGroupingToExcelSheet(ExcelReader *xlr, libxl::Sheet *sheet, std::shared_ptr<ReportPDF>, std::shared_ptr<wpSQLResultSet> rs, wxJSONValue &param, bool freezeHeader);
-        virtual std::string WriteToExcel(std::shared_ptr<wpSQLResultSet> rs, const std::string &title, const std::string &subTitle, const std::string &sheetName);
-        virtual std::string WriteToExcel(std::vector<std::pair<std::shared_ptr<wpSQLResultSet>, std::vector<int>>> &rs, const std::string &title, const std::string &subTitle, const std::string &sheetName);
-        // virtual void GetResultForXCelsius(XMLTag &tg, std::shared_ptr<wpSQLResultSet> rs, const std::string &variableName);
-#else
-        virtual void AppendToPDF(std::shared_ptr<ReportPDF> report, std::shared_ptr<wpSQLResultSet> rs, wxJSONValue &param, bool freezeHeader);
-#endif
-        virtual std::shared_ptr<ReportPDF> CreateNewPDF(std::shared_ptr<wpSQLResultSet> rs, const std::wstring &orientation, const std::wstring &sectionName, const std::wstring &title, const std::wstring &subTitle, wxJSONValue &param, const std::wstring outletName);
-        virtual wxJSONValue GetResultInJSON(std::shared_ptr<wpSQLResultSet> rs, std::unordered_map<std::string, std::function<std::string(std::shared_ptr<wpSQLResultSet>)>> fn);
-#endif
         virtual std::string GetResultTabDelimited(std::shared_ptr<wpSQLResultSet> rs, bool useActualTab = false, bool showColumnHeader = false) { return GetResultTabDelimited(rs, -1, useActualTab, showColumnHeader); }
         virtual std::string GetResultTabDelimited(std::shared_ptr<wpSQLResultSet> rs, int nRows, bool useActualTab = false, bool showColumnHeader = false, const std::string &filename = "");
-#ifdef PPOS_DB
-        int64_t GetReturnData(std::shared_ptr<wpSQLResultSet> rs, PPOS::ReturnData *result, ConvertFunction fnConvert = [](int, const std::string s) { return s; });
-#endif
         std::vector<std::vector<std::string>> GetVectorResult(std::shared_ptr<wpSQLResultSet> rs, int nRows = -1, bool showColumnHeader = false);
     };
 
     class UserDBRegistry {
         friend class SQLiteBase;
         SQLiteBase *sqlDB;
-#ifdef __WX__
-        std::shared_ptr<TableUpdateTimeSetter> syncUpdater;
-        std::shared_ptr<TableUpdateTimeSetter> CreateSyncUpdater();
-#endif
-
         std::unordered_map<std::string, int> autoLengthMap;
         std::shared_ptr<wpSQLStatement> GetUpdateKeyStatement(), GetInsertKeyStatement();
         std::shared_ptr<wpSQLStatement> GetLocalUpdateKeyStatement(), GetLocalInsertKeyStatement();
@@ -357,11 +200,7 @@ namespace DB {
         bool IsActivated(const std::string &key);
         UserDBRegistry(SQLiteBase *db);
         virtual ~UserDBRegistry() {}
-#ifdef __WX__
-        std::shared_ptr<TableUpdateTimeSetter> GetSyncUpdater();
-#endif
-        template<typename T = std::string>
-        void SetKey(const std::string &key, const T &val) {
+        template<typename T = std::string> void SetKey(const std::string &key, const T &val) {
             if (sqlDB->IsTableExist("ul_localkeys")) {
                 if (FindLocalKey(key)) {
                     SetLocalKey(key, val);
@@ -370,9 +209,6 @@ namespace DB {
             }
             std::shared_ptr<wpSQLStatement> stt = fn_sttFindKey();
             if (!stt) return;
-#ifdef __WX__
-            std::shared_ptr<TableUpdateTimeSetter> sy = GetSyncUpdater();
-#endif
             stt->Bind(1, key);
             std::shared_ptr<wpSQLResultSet> rs = stt->ExecuteQuery();
             if (rs->NextRow()) {
@@ -380,24 +216,17 @@ namespace DB {
                 sttUpdateKey->Bind(1, val);
                 sttUpdateKey->Bind(2, key);
                 sttUpdateKey->ExecuteUpdate();
-#ifdef __WX__
-                sy->SetUpdateDate(rs->Get<std::string>(0));
-#endif
             } else {
                 std::shared_ptr<wpSQLStatement> sttInsertKey = GetInsertKeyStatement();
                 sttInsertKey->Bind(1, key);
                 sttInsertKey->Bind(2, val);
                 sttInsertKey->ExecuteUpdate();
                 auto id = sqlDB->GetSession().GetLastRowId<std::string>();
-#ifdef __WX__
-                sy->SetUpdateDate(id);
-#endif
             }
         }
         virtual void EraseKey(const std::string &key);
 
-        template<typename T = std::string>
-        void SetLocalKey(const std::string &key, const T &val) {
+        template<typename T = std::string> void SetLocalKey(const std::string &key, const T &val) {
             try {
                 std::shared_ptr<wpSQLStatement> stt = fn_sttFindLocalKey();
                 if (!stt) return;
@@ -414,17 +243,14 @@ namespace DB {
                     sttInsertLocalKey->Bind(2, val);
                     sttInsertLocalKey->ExecuteUpdate();
                 }
-            } catch (wpSQLException &e) {
-                ShowLog(e.message);
-            } catch (...) {
-                ShowLog("???");
+            } catch (wpSQLException &e) { LOG_ERROR(e.message); } catch (...) {
+                LOG_ERROR("???");
             }
         }
 
         virtual void EraseLocalKey(const std::string &key);
 
-        template<typename T = std::string>
-        T GetKey(const std::string &key, const T &defaultKey = {}) {
+        template<typename T = std::string> T GetKey(const std::string &key, const T &defaultKey = {}) {
             T res {};
             if (FindLocalKey(key, res)) return res;
             // res is empty at this point.
@@ -433,28 +259,24 @@ namespace DB {
             stt->Bind(1, key);
 
             std::shared_ptr<wpSQLResultSet> rs = stt->ExecuteQuery();
-            if (rs->NextRow())
-                return rs->Get<T>(1);
+            if (rs->NextRow()) return rs->Get<T>(1);
             if (defaultKey != res)  // not empty
                 SetKey(key, defaultKey);
             return defaultKey;
         }
-        template<typename T = std::string>
-        T GetLocalKey(const std::string &key, const T &defaultKey = {}) {
+        template<typename T = std::string> T GetLocalKey(const std::string &key, const T &defaultKey = {}) {
             if (sqlDB->IsTableExist("ul_localkeys")) {
                 std::shared_ptr<wpSQLStatement> stt = fn_sttFindLocalKey();
                 stt->Bind(1, key);
                 std::shared_ptr<wpSQLResultSet> rs = stt->ExecuteQuery();
-                if (rs->NextRow())
-                    return rs->Get<T>(1);
+                if (rs->NextRow()) return rs->Get<T>(1);
                 if (defaultKey != T {})  // not empty
                     SetLocalKey(key, defaultKey);
             }
             return defaultKey;
         }
 
-        template<typename T>
-        std::vector<T> GetStringList(const T &key) {
+        template<typename T> std::vector<T> GetStringList(const T &key) {
             std::vector<T> res;
             std::string t = GetKey(to_string(key));
             if (t.empty()) return res;
@@ -468,8 +290,7 @@ namespace DB {
             return res;
         }
 
-        template<typename T>
-        std::vector<T> GetLocalStringList(const T &key) {
+        template<typename T> std::vector<T> GetLocalStringList(const T &key) {
             std::vector<T> res;
             std::string t = GetLocalKey(to_string(key));
             if (t.empty()) return res;
@@ -483,14 +304,8 @@ namespace DB {
             return res;
         }
 
-        // std::vector<std::string> GetStringList(const std::string &key);
-        // std::vector<std::wstring> GetStringList(const std::wstring &key);
-        // std::vector<std::string> GetLocalStringList(const std::string &key);
-        // std::vector<std::wstring> GetLocalStringList(const std::wstring &key);
-
         bool FindLocalKey(const std::string &key);
-        template<typename T>
-        bool FindLocalKey(const std::string &key, T &res) {
+        template<typename T> bool FindLocalKey(const std::string &key, T &res) {
             if (!sqlDB->IsTableExist("ul_localkeys")) return false;
             std::shared_ptr<wpSQLStatement> stt = fn_sttFindLocalKey();
             stt->Bind(1, key);
@@ -549,8 +364,7 @@ protected:
     DB::SQLiteBase *masterDB;
 
 public:
-    TransactionDB(const std::string &dbName, DB::SQLiteBase *mstr) : DB::SQLiteBase(dbName),
-                                                                     masterDB(mstr) {}
+    TransactionDB(const std::string &dbName, DB::SQLiteBase *mstr) : DB::SQLiteBase(dbName), masterDB(mstr) {}
     virtual ~TransactionDB() { Close(); }
     std::string GetMasterDBName() { return masterDB->GetDBName(); }
 

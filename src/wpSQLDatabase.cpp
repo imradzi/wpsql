@@ -1,19 +1,3 @@
-#include "precompiled/libcommon.h"
-#ifdef __clang__
-#if __has_warning("-Wdeprecated-enum-enum-conversion")
-#pragma clang diagnostic ignored "-Wdeprecated-enum-enum-conversion"  // warning: bitwise operation between different enumeration types ('XXXFlags_' and 'XXXFlagsPrivate_') is deprecated
-#endif
-#endif
-
-#ifdef __WX__
-#include "wx/wxprec.h"
-#ifndef WX_PRECOMP
-#include "wx/wx.h"
-#endif
-#include <wx/tokenzr.h>
-#include <wx/filename.h>
-#endif
-
 #include <chrono>
 #include <deque>
 #include <set>
@@ -23,26 +7,8 @@
 #include <boost/algorithm/string.hpp>
 #include <boost/make_shared.hpp>
 #include <boost/tokenizer.hpp>
-#ifdef PPOS_DB
-#include "global.h"
-#include "logger.h"
-#include "words.h"
-#endif
-
+#include "logging.hpp"
 #include "wpSQLDatabase.h"
-
-// std::string BuildFTSSearch(const std::string &param) {
-//     std::string res, delim;
-//     wxStringTokenizer tok(param, " \t\n");
-//     while (tok.HasMoreTokens()) {
-//         wxString v = tok.GetNextToken();
-//         v.Replace("\"", "\"\"", true);
-//         res.append(delim + "\"" + v + "\"" + "*");
-//         delim = " ";
-//     }
-//     if (res.empty()) res = "ALL";
-//     return res;
-// }
 
 std::string BuildFTSSearch(const std::string& param) {
     std::string res, delim;
@@ -91,7 +57,8 @@ wpSQLException::wpSQLException(const std::string m, int rc_, sqlite3 *db) : rc(r
         fmt::arg("msg", m),
         fmt::arg("rc", rc),
         fmt::arg("sqlerror", (db ? sqlite3_errmsg(db) : "")),
-        fmt::arg("dbname", (db ? sqlite3_db_filename(db, "main") : "name?")));
+        fmt::arg("dbname", (db ? sqlite3_db_filename(db, "main") : "name?"))
+    );
 }
 
 wpAutoCommitter::wpAutoCommitter(wpSQLDatabase *a) : toRollBack(true), db(a) {
@@ -122,9 +89,6 @@ const void *GetSQLFunctionParamBlob(sqlite3_value *data, int &len) {
 
 wpSQLManager::~wpSQLManager() {
     sqlite3_close_v2(db);
-    // std::string fName(sqlite3_db_filename(db, "main"));
-    // if (rc == SQLITE_OK) ShowLog("closed " + fName + " OK.");
-    // else ShowLog("closed " + fName + " failed."); //	throw wpSQLException("error closing DB", rc, db);
     db = NULL;
 }
 
@@ -409,20 +373,19 @@ bool wpSQLDatabase::HasPrimaryKey(const std::string &tabName) {
 extern int waitPerSlice; // ms
 extern int waitingFunction(void *, int nCall);
 
-void wpSQLDatabase::Open(const std::string &fileName, int) {  // one minute wait lock by default
+void wpSQLDatabase::Open(const std::string &fileName, OpenMode mode) {  // one minute wait lock by default
     if (GetDB()) Close();
     sqlite3 *d;
-    int rc = sqlite3_open_v2(fileName.c_str(), &d, SQLITE_OPEN_READWRITE | SQLITE_OPEN_CREATE | SQLITE_OPEN_NOMUTEX, NULL);
-    if (rc == SQLITE_OK)
-        ;  // ShowLog(fileName + " opened ok => " + std::string::FromUTF8(sqlite3_db_filename(d, "main")));
-    else {
-        // ShowLog(fileName + " failed to open.");
+    int flags = SQLITE_OPEN_NOMUTEX | (mode == OpenMode::ReadWrite ? (SQLITE_OPEN_READWRITE | SQLITE_OPEN_CREATE) : SQLITE_OPEN_READONLY);
+    int rc = sqlite3_open_v2(fileName.c_str(), &d, flags, NULL);
+    if (rc != SQLITE_OK) {
+        LOG_ERROR("wpSQLDatabase::Open -> {} failed to open", fileName);
         throw wpSQLException(fmt::format("{} failed to open", fileName), rc, d);
     }
     db = std::make_shared<wpSQLManager>(d);
     sqlite3_busy_timeout(db->GetSQLite3(), waitPerSlice); 
     sqlite3_busy_handler(db->GetSQLite3(), &waitingFunction, this);
-    Execute("PRAGMA encoding = \"UTF-16\"", NULL);
+    if (mode == OpenMode::ReadWrite) Execute("PRAGMA encoding = \"UTF-16\"", NULL);
 }
 
 void wpSQLDatabase::Rollback(const std::string &checkPoint) {

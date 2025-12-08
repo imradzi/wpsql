@@ -1,20 +1,3 @@
-#include "precompiled/libcommon.h"
-
-#ifdef _WIN32
-#define _CRTDBG_MAP_ALLOC
-#include <stdlib.h>
-#include <crtdbg.h>
-#endif
-#ifdef _WIN32
-#include "winsock2.h"
-#endif
-
-#ifdef __clang__
-#if __has_warning("-Wdeprecated-enum-enum-conversion")
-#pragma clang diagnostic ignored "-Wdeprecated-enum-enum-conversion"  // warning: bitwise operation between different enumeration types ('XXXFlags_' and 'XXXFlagsPrivate_') is deprecated
-#endif
-#endif
-
 #include <filesystem>
 
 #include "rDb.h"

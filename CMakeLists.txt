@@ -15,12 +15,15 @@ set(WPSQL_SOURCES
     src/timefunctions.cpp
     src/wpSQLDatabase.cpp
     src/sqlite3/sqlite3.c
+    src/ZIP.cpp
+    src/ulid.cpp
 )
 
 # Library headers
 set(WPSQL_HEADERS
     include/logging.hpp
     include/rDb.h
+    include/ulid.hpp
     include/timefunctions.h
     include/wpSQLDatabase.h
 )

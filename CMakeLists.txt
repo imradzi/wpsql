@@ -7,7 +7,6 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 # Library sources
 set(WPSQL_SOURCES
     src/checkSchema.cpp
-    src/command.cpp
     src/dbbackup.cpp
     src/lockTimeout.cpp
     src/logging.cpp
@@ -20,7 +19,6 @@ set(WPSQL_SOURCES
 
 # Library headers
 set(WPSQL_HEADERS
-    include/command.h
     include/logging.hpp
     include/rDb.h
     include/timefunctions.h

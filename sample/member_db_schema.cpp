@@ -61,6 +61,16 @@ std::vector<DB::DBObjects> MemberDb::objectList() const {
            "create table <TABLENAME> ("
            "  id blob primary key, " // ulid
            "  dob integer, "
+           "  noOfTrans integer, "
+           "  timeCreated integer "
+           ")",
+       }},
+      {"MemberTransactions",
+       DB::Table,
+       {
+           "create table <TABLENAME> ("
+           "  id blob primary key, " // ulid
+           "  amount integer, " // in cents
            "  timeCreated integer "
            ")",
        }}
@@ -71,4 +81,4 @@ std::vector<DB::DBObjects> MemberDb::objectList() const {
   return ol;
 }
 
-void MemberDb::CheckStructure() {DB::SQLiteBase::CheckStructure();}
+void MemberDb::CheckStructure() { DB::SQLiteBase::CheckStructure(); }

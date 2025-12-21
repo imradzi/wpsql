@@ -15,6 +15,7 @@ void CreateNonExistingFolders(const std::string &filename) {
     fs::create_directories(path.parent_path());
 }
 
+
 DB::TypeRegistry::TypeRegistry(DB::SQLiteBase &db)
   : reg(db.GetRegistry()),
     d(db) {

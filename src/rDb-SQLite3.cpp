@@ -13,6 +13,53 @@
 namespace fs = std::filesystem;
 using namespace std::chrono_literals;
 
+std::vector<DB::DBObjects> DB::SQLiteBase::objectList() const {
+    return std::vector<DB::DBObjects> {
+        {"ul_keys",
+            DB::Table,
+            {
+                "create table <TABLENAME>("
+                "  id integer primary key, "
+                "  key text, "
+                "  value text, "
+                "  description text, "
+                "  isDeleted integer, "
+                "  unique(key)"
+                ")",
+                "create index idx_<TABLENAME>_key on <TABLENAME>(key)",
+            }},
+
+        {"UL_LocalKeys",
+            DB::Table,
+            {
+                "create table <TABLENAME>("
+                "  id integer primary key, "
+                "  key text, "
+                "  value text, "
+                "  description text, "
+                "  isDeleted integer, "
+                "  unique(key) "
+                ")",
+                "create index idx_<TABLENAME>_key on <TABLENAME>(key)",
+            }},
+
+        {"Types",
+            DB::Table,
+            {
+                "create table <TABLENAME>("
+                "  id integer primary key, "
+                "  parentID integer, "
+                "  code text, "
+                "  name text, "
+                "  limitvalue text, "
+                "  defaultvalue text, "
+                "  isDeleted integer, "
+                "  foreign key(parentID) references types(id)"
+                ")",
+            }},
+    };
+}
+
 std::shared_ptr<DB::UserDBRegistry> DB::SQLiteBase::GetRegistry() {
     if (!userDBregistry)
         userDBregistry = std::make_shared<DB::UserDBRegistry>(this);

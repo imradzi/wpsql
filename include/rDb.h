@@ -9,9 +9,6 @@
 
 using ConvertFunction = std::function<std::string(int, const std::string &)>;
 
-constexpr char EOFFIELDCHAR = 0x1E;
-constexpr char EOLINECHAR = 0x1F;
-
 namespace DB {
     class SQLiteBase;
 }

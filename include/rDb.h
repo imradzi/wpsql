@@ -95,7 +95,7 @@ namespace DB {
         std::shared_ptr<wpSQLDatabase> db;
         bool dropAllObjects;
         bool isNewDatabase;
-        virtual std::vector<DBObjects> objectList() const { return std::vector<DBObjects> {}; }  // returns a copy of emptyObject;
+        virtual std::vector<DB::DBObjects> objectList() const ;
         virtual bool Create();
     private:
         void CreateObject(const std::string &f, const DB::ObjectType ty, const std::vector<std::string> crSQL, bool dropIfExist = false, const std::string &replMaster = "", const std::string &replSibling = "");

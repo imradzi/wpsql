@@ -789,7 +789,6 @@ std::shared_ptr<wpSQLStatement> DB::UserDBRegistry::GetInsertKeyStatement() { re
 std::shared_ptr<wpSQLStatement> DB::UserDBRegistry::GetLocalUpdateKeyStatement() { return sqlDB->IsTableExist("ul_localkeys") ? sqlDB->GetSession().PrepareStatement("update ul_LocalKeys set value=?, isDeleted=NULL where key = ?") : NULL; }
 std::shared_ptr<wpSQLStatement> DB::UserDBRegistry::GetLocalInsertKeyStatement() { return sqlDB->IsTableExist("ul_localkeys") ? sqlDB->GetSession().PrepareStatement("insert into ul_LocalKeys (key, value) values (?,?)") : NULL; }
 
-
 void DB::UserDBRegistry::EraseKey(const std::string &key) {
     std::shared_ptr<wpSQLStatement> stt = fn_sttEraseKey();
     if (!stt) return;

@@ -67,7 +67,7 @@ ULID::ULID(const std::string& ulid_string, bool isBinary) {
     int bits_accumulated = 0;
     int byte_index = 0;
 
-    for (char c : ulid_string) {
+    for (int c : ulid_string) {
         if (c < 0 || c >= 128 || DECODING[c] == -1) {
             throw std::invalid_argument("Invalid character in ULID string");
         }
@@ -219,7 +219,7 @@ bool ULID::isValidString(const std::string& ulid_string){
         return false;
     }
 
-    for (char c : ulid_string) {
+    for (int c : ulid_string) {
         if (c < 0 || c >= 128 || DECODING[c] == -1) {
             return false;
         }

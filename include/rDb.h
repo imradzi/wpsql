@@ -183,6 +183,7 @@ namespace DB {
     };
 
     class UserDBRegistry {
+    protected:
         friend class SQLiteBase;
         SQLiteBase *sqlDB;
         std::unordered_map<std::string, int> autoLengthMap;
@@ -194,7 +195,6 @@ namespace DB {
         std::function<std::shared_ptr<wpSQLStatement>()> fn_sttEraseKey;
 
     public:
-        bool IsActivated(const std::string &key);
         UserDBRegistry(SQLiteBase *db);
         virtual ~UserDBRegistry() {}
         template<typename T = std::string> void SetKey(const std::string &key, const T &val) {

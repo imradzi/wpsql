@@ -1,4 +1,11 @@
 #pragma once
+#ifdef __WX__
+#include "wx/wxprec.h"
+#ifndef WX_PRECOMP
+#include "wx/wx.h"
+#endif
+#endif
+
 #include "sqlite3.h"
 #include <type_traits>
 #include <fmt/format.h>
@@ -331,6 +338,22 @@ public:
             rc = sqlite3_bind_blob(stmt->GetStatement(), idx, (const void *)val.data, (int)(val.size()), nullptr);
         else if constexpr (std::is_same_v<T, char *>)
             rc = sqlite3_bind_text(stmt->GetStatement(), idx, val, -1, SQLITE_TRANSIENT);  // sqlite_transient - sqlite use internal mem
+#ifdef __WX__
+        else if constexpr (std::is_same_v<T, wxLongLong>)
+            rc = sqlite3_bind_int64(stmt->GetStatement(), idx, val.GetValue());
+        else if constexpr (std::is_same_v<T, wxMemoryBuffer>)
+            rc = sqlite3_bind_blob(stmt->GetStatement(), idx, (const void *)val.GetData(), (int)(val.GetDataLen()), nullptr);
+        else if constexpr (std::is_same_v<T, wxDateTime>) {
+            if (val.IsValid())
+                rc = sqlite3_bind_int64(stmt->GetStatement(), idx, val.GetValue().GetValue());
+            else
+                rc = sqlite3_bind_null(stmt->GetStatement(), idx);
+        } else if constexpr (std::is_same_v<T, wxDateTime::wxDateTime_t>)
+            rc = sqlite3_bind_int(stmt->GetStatement(), idx, static_cast<unsigned short>(val));
+        else if constexpr (std::is_same_v<T, wxString>)
+            rc = sqlite3_bind_text(stmt->GetStatement(), idx, val.data(), -1, SQLITE_TRANSIENT);  // sqlite_transient - sqlite use internal mem
+#endif
+
         else if constexpr (std::is_same_v<T, std::string>)
             rc = sqlite3_bind_text(stmt->GetStatement(), idx, val.c_str(), -1, SQLITE_TRANSIENT);  // sqlite_transient - sqlite use internal mem
         else if constexpr (std::is_same_v<T, ULID>) {

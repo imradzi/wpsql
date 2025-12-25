@@ -174,12 +174,9 @@ namespace DB {
         virtual std::string Translate(const std::string &s) { return s; }
         virtual std::wstring Translate(const std::wstring &s) { return to_wstring(Translate(to_string(s))); }
 
-        std::string GetDayName(int i);
-        std::string GetMonthName(int i);
+        static std::string GetDayName(int i);
+        static std::string GetMonthName(int i);
 
-        virtual std::string GetResultTabDelimited(std::shared_ptr<wpSQLResultSet> rs, bool useActualTab = false, bool showColumnHeader = false) { return GetResultTabDelimited(rs, -1, useActualTab, showColumnHeader); }
-        virtual std::string GetResultTabDelimited(std::shared_ptr<wpSQLResultSet> rs, int nRows, bool useActualTab = false, bool showColumnHeader = false, const std::string &filename = "");
-        std::vector<std::vector<std::string>> GetVectorResult(std::shared_ptr<wpSQLResultSet> rs, int nRows = -1, bool showColumnHeader = false);
     };
 
     class UserDBRegistry {

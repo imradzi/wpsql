@@ -327,13 +327,13 @@ void DB::SQLiteBase::CreateAllObjects(bool checkAndCreate, bool toExecuteCommand
 std::string DB::SQLiteBase::GetDayName(int i) {
     std::string v;
     switch (i) {
-        case 0: v = ::Translate("Sunday"); break;
-        case 1: v = ::Translate("Monday"); break;
-        case 2: v = ::Translate("Tuesday"); break;
-        case 3: v = ::Translate("Wednesday"); break;
-        case 4: v = ::Translate("Thursday"); break;
-        case 5: v = ::Translate("Friday"); break;
-        case 6: v = ::Translate("Saturday"); break;
+        case 0: v = "Sunday"; break;
+        case 1: v = "Monday"; break;
+        case 2: v = "Tuesday"; break;
+        case 3: v = "Wednesday"; break;
+        case 4: v = "Thursday"; break;
+        case 5: v = "Friday"; break;
+        case 6: v = "Saturday"; break;
     }
     return v;
 }
@@ -341,18 +341,18 @@ std::string DB::SQLiteBase::GetDayName(int i) {
 std::string DB::SQLiteBase::GetMonthName(int i) {
     std::string v;
     switch (i) {
-        case 1: v = ::Translate("January"); break;
-        case 2: v = ::Translate("February"); break;
-        case 3: v = ::Translate("March"); break;
-        case 4: v = ::Translate("April"); break;
-        case 5: v = ::Translate("May"); break;
-        case 6: v = ::Translate("June"); break;
-        case 7: v = ::Translate("July"); break;
-        case 8: v = ::Translate("August"); break;
-        case 9: v = ::Translate("September"); break;
-        case 10: v = ::Translate("October"); break;
-        case 11: v = ::Translate("November"); break;
-        case 12: v = ::Translate("December"); break;
+        case 1: v = "January"; break;
+        case 2: v = "February"; break;
+        case 3: v = "March"; break;
+        case 4: v = "April"; break;
+        case 5: v = "May"; break;
+        case 6: v = "June"; break;
+        case 7: v = "July"; break;
+        case 8: v = "August"; break;
+        case 9: v = "September"; break;
+        case 10: v = "October"; break;
+        case 11: v = "November"; break;
+        case 12: v = "December"; break;
     }
     return v;
 }

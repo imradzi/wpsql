@@ -7,6 +7,9 @@
 #include "wpSQLDatabase.h"
 #include "logging.hpp"
 
+constexpr char EOFFIELDCHAR = 0x1E;
+constexpr char EOLINECHAR = 0x1F;
+
 using ConvertFunction = std::function<std::string(int, const std::string &)>;
 
 namespace DB {

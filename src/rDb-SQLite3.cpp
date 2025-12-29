@@ -96,7 +96,8 @@ DB::SQLiteBase::SQLiteBase(const std::string &dbName, bool _turnOffSync, bool _i
             path = fs::path(_dbName);
         }
         _pathName = fmt::format("{}{}", fs::path(_dbName).parent_path().string(), std::string(1, fs::path::preferred_separator));
-        fs::create_directories(path.parent_path());
+        if (!fs::exists(path.parent_path()))
+            fs::create_directories(path.parent_path());
     } else {
         _pathName = _dbName;
         mainDBname = _dbName;

@@ -7,8 +7,11 @@
 #include "wpSQLDatabase.h"
 #include "logging.hpp"
 
+#ifndef DEF_EOFFIELDCHAR
 constexpr char EOFFIELDCHAR = 0x1E;
 constexpr char EOLINECHAR = 0x1F;
+#define DEF_EOFFIELDCHAR
+#endif
 
 using ConvertFunction = std::function<std::string(int, const std::string &)>;
 

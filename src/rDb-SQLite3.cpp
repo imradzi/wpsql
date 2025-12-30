@@ -13,6 +13,53 @@
 namespace fs = std::filesystem;
 using namespace std::chrono_literals;
 
+std::vector<DB::DBObjects> DB::SQLiteBase::objectList() const {
+    return std::vector<DB::DBObjects> {
+        {"ul_keys",
+            DB::Table,
+            {
+                "create table <TABLENAME>("
+                "  id integer primary key, "
+                "  key text, "
+                "  value text, "
+                "  description text, "
+                "  isDeleted integer, "
+                "  unique(key)"
+                ")",
+                "create index idx_<TABLENAME>_key on <TABLENAME>(key)",
+            }},
+
+        {"UL_LocalKeys",
+            DB::Table,
+            {
+                "create table <TABLENAME>("
+                "  id integer primary key, "
+                "  key text, "
+                "  value text, "
+                "  description text, "
+                "  isDeleted integer, "
+                "  unique(key) "
+                ")",
+                "create index idx_<TABLENAME>_key on <TABLENAME>(key)",
+            }},
+
+        {"Types",
+            DB::Table,
+            {
+                "create table <TABLENAME>("
+                "  id integer primary key, "
+                "  parentID integer, "
+                "  code text, "
+                "  name text, "
+                "  limitvalue text, "
+                "  defaultvalue text, "
+                "  isDeleted integer, "
+                "  foreign key(parentID) references types(id)"
+                ")",
+            }},
+    };
+}
+
 std::shared_ptr<DB::UserDBRegistry> DB::SQLiteBase::GetRegistry() {
     if (!userDBregistry)
         userDBregistry = std::make_shared<DB::UserDBRegistry>(this);
@@ -49,7 +96,8 @@ DB::SQLiteBase::SQLiteBase(const std::string &dbName, bool _turnOffSync, bool _i
             path = fs::path(_dbName);
         }
         _pathName = fmt::format("{}{}", fs::path(_dbName).parent_path().string(), std::string(1, fs::path::preferred_separator));
-        fs::create_directories(path.parent_path());
+        if (!fs::exists(path.parent_path()))
+            fs::create_directories(path.parent_path());
     } else {
         _pathName = _dbName;
         mainDBname = _dbName;
@@ -277,174 +325,16 @@ void DB::SQLiteBase::CreateAllObjects(bool checkAndCreate, bool toExecuteCommand
     }
 }
 
-enum ColumnTypeTabDelim { None,
-    KeyCode,
-    DivFactor,
-    date,
-    year,
-    month,
-    expiry };
-
-// erase nonprintable char : t.erase(std::remove_if(t.begin(), t.end(), [](unsigned char x) { return !std::isprint(x); }), t.end());
-// replace std::replace_if(t.begin(), t.end(), [](unsigned char v) { return !std::isalnum(v); }, '.');
-
-std::string ConvertRowValue(int *colDef, std::shared_ptr<wpSQLResultSet> rs, int i, std::function<std::string(std::shared_ptr<wpSQLResultSet>)> fn = nullptr) {
-    std::string t = fn ? fn(rs) : rs->Get(i);
-    switch (colDef[i]) {
-        case ColumnTypeTabDelim::DivFactor: {
-            double x = rs->Get<double>(i);
-            t = std::to_string(x);
-            break;
-        }
-        case ColumnTypeTabDelim::date: {
-            auto x = rs->Get<TimePoint>(i);
-            if (IsValidTimePoint(x))
-                t = FormatDate(x, "%d-%m-%Y");
-            break;
-        }
-        case ColumnTypeTabDelim::year: {
-            auto x = rs->Get<TimePoint>(i);
-            t = FormatDate(x, "%Y");
-            break;
-        }
-        case ColumnTypeTabDelim::month: {
-            auto x = rs->Get<TimePoint>(i);
-            if (IsValidTimePoint(x))
-                t = FormatDate(x, "%b-%Y");
-            break;
-        }
-        case ColumnTypeTabDelim::expiry: {
-            auto x = rs->Get<TimePoint>(i);
-            if (IsValidTimePoint(x))
-                t = FormatDate(x, wpEXPIRYDATEFORMAT);
-            break;
-        }
-        default:
-            break;
-    }
-    return t;
-}
-
-void CreateColumnDefinition(int *colDef, std::shared_ptr<wpSQLResultSet> rs, int i) {
-    colDef[i] = -1;
-    std::string colName = rs->GetColumnName(i);
-    if (boost::icontains(colName, "@keycode")) {
-        colDef[i] = ColumnTypeTabDelim::KeyCode;
-    } else if (boost::icontains(colName, "@dividefactor")) {
-        colDef[i] = ColumnTypeTabDelim::DivFactor;
-    } else if (boost::icontains(colName, "@date")) {
-        colDef[i] = ColumnTypeTabDelim::date;
-    } else if (boost::icontains(colName, "@year")) {
-        colDef[i] = ColumnTypeTabDelim::year;
-    } else if (boost::icontains(colName, "@month")) {
-        colDef[i] = ColumnTypeTabDelim::month;
-    } else if (boost::icontains(colName, "@expiry")) {
-        colDef[i] = ColumnTypeTabDelim::expiry;
-    }
-}
-
-std::string DB::SQLiteBase::GetResultTabDelimited(std::shared_ptr<wpSQLResultSet> rs, int nRows, bool useActualTab, bool showColHeader, const std::string &filename) {
-    std::string delim0;
-    std::string delim;
-    const std::string eolChar = useActualTab ? std::string("\r\n") : std::string(1, EOLINECHAR);
-    const std::string eofChar = useActualTab ? std::string("\t") : std::string(1, EOFFIELDCHAR);
-
-    // auto sout = std::make_unique<std::ostringstream>(std::ios_base::out);
-    std::unique_ptr<std::ostream> out;
-    if (filename.empty())
-        out = std::make_unique<std::ostringstream>(std::ios_base::out);
-    else
-        out = std::make_unique<std::ofstream>(filename, std::ios_base::out);
-
-    if (nRows >= 0) {
-        *out << std::to_string(nRows) << eolChar;
-    }
-    int *colDef = new int[rs->GetColumnCount()];
-    memset(colDef, -1, rs->GetColumnCount());
-    //	std::vector<ColumnTypeTabDelim> colDef; colDef.resize(rs->GetColumnCount(), ColumnTypeTabDelim::None);
-    for (int i = 0; i < rs->GetColumnCount(); i++) {
-        CreateColumnDefinition(colDef, rs, i);
-        if (showColHeader) {
-            std::string str {rs->GetColumnName(i)};
-            boost::tokenizer<boost::char_separator<char>> tok(str, boost::char_separator<char>("@", "", boost::keep_empty_tokens));
-            auto it = tok.begin();
-            std::string ttl = rs->GetColumnName(i);
-            if (it != tok.end()) ttl = *it;
-
-            *out << delim;
-            *out << ttl;
-            delim = eofChar;
-        }
-    }
-    if (showColHeader) {
-        delim0 = eolChar;
-    }
-    int nRow = 0;
-    for (; rs->NextRow(); nRow++) {
-        *out << delim0;
-        delim = "";
-        std::string rowRec;
-        for (int i = 0; i < rs->GetColumnCount(); i++) {
-            rowRec.append(delim);
-            std::string t = ConvertRowValue(colDef, rs, i);
-            if (useActualTab)
-                rowRec.append(boost::trim_copy(t));
-            else
-                rowRec.append(t);
-            delim = eofChar;
-        }
-        *out << rowRec;
-        delim0 = eolChar;
-    }
-    delete[] colDef;
-    if (filename.empty())
-        return static_cast<std::ostringstream *>(out.get())->str();
-    else
-        return std::to_string(nRow);
-}
-
-std::vector<std::vector<std::string>> DB::SQLiteBase::GetVectorResult(std::shared_ptr<wpSQLResultSet> rs, int nRows, bool showColHeader) {
-    std::vector<std::vector<std::string>> result;
-    try {
-        int *colDef = new int[rs->GetColumnCount()];
-        memset(colDef, -1, rs->GetColumnCount());
-        std::vector<std::string> *currentRow {nullptr};
-        if (showColHeader) currentRow = &result.emplace_back();
-        for (int i = 0; i < rs->GetColumnCount(); i++) {
-            CreateColumnDefinition(colDef, rs, i);
-            if (showColHeader) {
-                std::string str {rs->GetColumnName(i)};
-                boost::tokenizer<boost::char_separator<char>> tok(str, boost::char_separator<char>("@", "", boost::keep_empty_tokens));
-                auto ttl = rs->GetColumnName(i);
-                auto it = tok.begin();
-                if (it != tok.end()) ttl = *it;
-                currentRow->emplace_back(ttl);
-            }
-        }
-        int nRow = 0;
-        for (; rs->NextRow(); nRow++) {
-            currentRow = &result.emplace_back();
-            for (int i = 0; i < rs->GetColumnCount(); i++) {
-                currentRow->emplace_back(ConvertRowValue(colDef, rs, i));
-            }
-        }
-        delete[] colDef;
-    } catch (...) {
-        LOG_ERROR("GetVectorResult throw exception");
-    }
-    return result;
-}
-
 std::string DB::SQLiteBase::GetDayName(int i) {
     std::string v;
     switch (i) {
-        case 0: v = Translate("Sunday"); break;
-        case 1: v = Translate("Monday"); break;
-        case 2: v = Translate("Tuesday"); break;
-        case 3: v = Translate("Wednesday"); break;
-        case 4: v = Translate("Thursday"); break;
-        case 5: v = Translate("Friday"); break;
-        case 6: v = Translate("Saturday"); break;
+        case 0: v = "Sunday"; break;
+        case 1: v = "Monday"; break;
+        case 2: v = "Tuesday"; break;
+        case 3: v = "Wednesday"; break;
+        case 4: v = "Thursday"; break;
+        case 5: v = "Friday"; break;
+        case 6: v = "Saturday"; break;
     }
     return v;
 }
@@ -452,18 +342,18 @@ std::string DB::SQLiteBase::GetDayName(int i) {
 std::string DB::SQLiteBase::GetMonthName(int i) {
     std::string v;
     switch (i) {
-        case 1: v = Translate("January"); break;
-        case 2: v = Translate("February"); break;
-        case 3: v = Translate("March"); break;
-        case 4: v = Translate("April"); break;
-        case 5: v = Translate("May"); break;
-        case 6: v = Translate("June"); break;
-        case 7: v = Translate("July"); break;
-        case 8: v = Translate("August"); break;
-        case 9: v = Translate("September"); break;
-        case 10: v = Translate("October"); break;
-        case 11: v = Translate("November"); break;
-        case 12: v = Translate("December"); break;
+        case 1: v = "January"; break;
+        case 2: v = "February"; break;
+        case 3: v = "March"; break;
+        case 4: v = "April"; break;
+        case 5: v = "May"; break;
+        case 6: v = "June"; break;
+        case 7: v = "July"; break;
+        case 8: v = "August"; break;
+        case 9: v = "September"; break;
+        case 10: v = "October"; break;
+        case 11: v = "November"; break;
+        case 12: v = "December"; break;
     }
     return v;
 }
@@ -741,7 +631,6 @@ std::shared_ptr<wpSQLStatement> DB::UserDBRegistry::GetUpdateKeyStatement() { re
 std::shared_ptr<wpSQLStatement> DB::UserDBRegistry::GetInsertKeyStatement() { return sqlDB->IsTableExist("ul_keys") ? sqlDB->GetSession().PrepareStatement("insert into ul_keys (key, value) values (?,?)") : NULL; }
 std::shared_ptr<wpSQLStatement> DB::UserDBRegistry::GetLocalUpdateKeyStatement() { return sqlDB->IsTableExist("ul_localkeys") ? sqlDB->GetSession().PrepareStatement("update ul_LocalKeys set value=?, isDeleted=NULL where key = ?") : NULL; }
 std::shared_ptr<wpSQLStatement> DB::UserDBRegistry::GetLocalInsertKeyStatement() { return sqlDB->IsTableExist("ul_localkeys") ? sqlDB->GetSession().PrepareStatement("insert into ul_LocalKeys (key, value) values (?,?)") : NULL; }
-
 
 void DB::UserDBRegistry::EraseKey(const std::string &key) {
     std::shared_ptr<wpSQLStatement> stt = fn_sttEraseKey();

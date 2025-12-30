@@ -240,6 +240,37 @@ public:
         } else if constexpr (std::is_same_v<T, int64_t>) {
             if (GetColumnType(i) == SQLITE_NULL) return defaultValue;
             return sqlite3_column_int64(stmt->GetStatement(), i);
+#ifdef __WX__
+        } else if constexpr (std::is_same_v<T, wxLongLong>) {
+          if (GetColumnType(i) == SQLITE_NULL)
+            return defaultValue;
+          return wxLongLong(sqlite3_column_int64(stmt->GetStatement(), i));
+        } else if constexpr (std::is_same_v<T, wxMemoryBuffer>) {
+          wxMemoryBuffer buffer;
+          if (GetColumnType(i) == SQLITE_NULL)
+            return buffer;
+          int len = sqlite3_column_bytes(stmt->GetStatement(), i);
+          const void *blob = sqlite3_column_blob(stmt->GetStatement(), i);
+          buffer.AppendData((void *)blob, (size_t)len);
+          return buffer;
+        } else if constexpr (std::is_same_v<T, wxDateTime>) {
+          if (GetColumnType(i) == SQLITE_NULL)
+            return wxInvalidDateTime;
+          wxLongLong value =
+              wxLongLong(sqlite3_column_int64(stmt->GetStatement(), i));
+          return wxDateTime(value);
+        } else if constexpr (std::is_same_v<T, wxDateTime::wxDateTime_t>) {
+          if (GetColumnType(i) == SQLITE_NULL)
+            return wxInvalidDateTime;
+          return static_cast<wxDateTime::wxDateTime_t>(
+              sqlite3_column_int(stmt->GetStatement(), i));
+        } else if constexpr (std::is_same_v<T, wxString>) {
+          if (GetColumnType(i) == SQLITE_NULL)
+            return defaultValue;
+          return reinterpret_cast<const char *>(
+              sqlite3_column_text(stmt->GetStatement(), i));
+#endif
+
         } else if constexpr (std::is_same_v<T, int>) {
             if (GetColumnType(i) == SQLITE_NULL) return defaultValue;
             return sqlite3_column_int(stmt->GetStatement(), i);
@@ -312,6 +343,21 @@ public:
         int rc;
         if constexpr (std::is_same_v<T, int64_t>)
             rc = sqlite3_bind_int64(stmt->GetStatement(), idx, val);
+#ifdef __WX__
+        else if constexpr (std::is_same_v<T, wxLongLong>)
+            rc = sqlite3_bind_int64(stmt->GetStatement(), idx, val.GetValue());
+        else if constexpr (std::is_same_v<T, wxMemoryBuffer>)
+            rc = sqlite3_bind_blob(stmt->GetStatement(), idx, (const void *)val.GetData(), (int)(val.GetDataLen()), nullptr);
+        else if constexpr (std::is_same_v<T, wxDateTime>) {
+            if (val.IsValid())
+                rc = sqlite3_bind_int64(stmt->GetStatement(), idx, val.GetValue().GetValue());
+            else
+                rc = sqlite3_bind_null(stmt->GetStatement(), idx);
+        } else if constexpr (std::is_same_v<T, wxDateTime::wxDateTime_t>)
+            rc = sqlite3_bind_int(stmt->GetStatement(), idx, static_cast<unsigned short>(val));
+        else if constexpr (std::is_same_v<T, wxString>)
+            rc = sqlite3_bind_text(stmt->GetStatement(), idx, val.data(), -1, SQLITE_TRANSIENT);  // sqlite_transient - sqlite use internal mem
+#endif
         else if constexpr (std::is_same_v<T, long>)
             rc = sqlite3_bind_int(stmt->GetStatement(), idx, val);
         else if constexpr (std::is_same_v<T, long long>)
@@ -391,8 +437,13 @@ public:
     template<typename T = int64_t> T GetLastRowId() {
         if constexpr (std::is_same_v<T, std::string>)
             return IsOpen() ? std::to_string(sqlite3_last_insert_rowid(GetDB())) : "0";
+#ifdef __WX__
+        else if constexpr (std::is_same_v<T, wxString>)
+          return IsOpen() ? std::to_string(sqlite3_last_insert_rowid(GetDB()))
+                          : "0";
+#endif
         else
-            return IsOpen() ? sqlite3_last_insert_rowid(GetDB()) : 0;
+          return IsOpen() ? sqlite3_last_insert_rowid(GetDB()) : 0;
     }
     bool Begin();
     void Commit();

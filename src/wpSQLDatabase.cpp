@@ -7,7 +7,7 @@
 #include <boost/algorithm/string.hpp>
 #include <boost/make_shared.hpp>
 #include <boost/tokenizer.hpp>
-#include "logging.hpp"
+#include "logger/logging.hpp"
 #include "wpSQLDatabase.h"
 
 std::string BuildFTSSearch(const std::string& param) {

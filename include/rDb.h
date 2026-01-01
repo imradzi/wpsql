@@ -5,7 +5,7 @@
 #include <boost/tokenizer.hpp>
 #include <string>
 #include "wpSQLDatabase.h"
-#include "logging.hpp"
+#include "logger/logging.hpp"
 
 #ifndef DEF_EOFFIELDCHAR
 constexpr char EOFFIELDCHAR = 0x1E;

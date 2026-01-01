@@ -9,7 +9,8 @@ set(WPSQL_SOURCES
     src/checkSchema.cpp
     src/dbbackup.cpp
     src/lockTimeout.cpp
-    src/logging.cpp
+    logger/logging.cpp
+    logger/logger.cpp
     src/rDb.cpp
     src/rDb-SQLite3.cpp
     src/timefunctions.cpp
@@ -21,7 +22,8 @@ set(WPSQL_SOURCES
 
 # Library headers
 set(WPSQL_HEADERS
-    include/logging.hpp
+    logger/logging.hpp
+    logger/logger.h
     include/rDb.h
     include/ulid.hpp
     include/timefunctions.h
@@ -35,6 +37,7 @@ add_library(wpSQL STATIC ${WPSQL_SOURCES} ${WPSQL_HEADERS})
 target_include_directories(wpSQL
     PUBLIC
         $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+        $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>
         $<INSTALL_INTERFACE:include>
 )
 

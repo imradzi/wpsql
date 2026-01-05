@@ -307,6 +307,10 @@ int wpSQLDatabase::Execute(const std::string &sql, std::function<void(int, char 
                     if (zErrMsg) sqlite3_free(zErrMsg);
                     throw wpSQLException(v, SQLITE_BUSY, db->GetSQLite3());
                 }
+                if (zErrMsg) {
+                    sqlite3_free(zErrMsg);
+                    zErrMsg = NULL;
+                }
                 std::this_thread::yield();
                 std::this_thread::sleep_for(std::chrono::seconds(secPerSleep));
             } else {

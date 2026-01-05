@@ -368,7 +368,7 @@ public:
     virtual ~TransactionDB() { Close(); }
     std::string GetMasterDBName() { return masterDB->GetDBName(); }
 
-    void CheckStructure() override { DB::SQLiteBase::CheckStructure(); }
+    void CheckStructure() override;
     void InitializeLocalVariables() override { DB::SQLiteBase::InitializeLocalVariables(); }
     void Initialize() override { DB::SQLiteBase::Initialize(); }
     virtual bool Migrate(DB::SQLiteBase *d, std::vector<std::string> &tableList);

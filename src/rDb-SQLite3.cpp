@@ -705,10 +705,20 @@ std::vector<DB::DBObjects> TransactionDB::objectList() const {
              "unique(key) "
              ")",
                 "create index idx_<TABLENAME>_key on <TABLENAME>(key)"}}};
-    auto ol = DB::SQLiteBase::objectList();
-    ol.insert(ol.end(), list.begin(), list.end());
-    return ol;
+    // don't start from DB::SQLiteBase - but start with zero.
+    // auto ol = DB::SQLiteBase::objectList();
+    // ol.insert(ol.end(), list.begin(), list.end());
+    return list;
 }
+
+void TransactionDB::CheckStructure() {
+    if (IsTableExist("Ul_Keys")) {
+        GetSession().ExecuteUpdate("drop table ul_keys");
+    }
+
+    DB::SQLiteBase::CheckStructure();
+}
+
 
 bool TransactionDB::AttachMasterDB() {
     bool found = false;

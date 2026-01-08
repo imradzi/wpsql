@@ -299,12 +299,13 @@ void DB::SQLiteBase::Open(bool checkAndCreate, OpenMode mode) {
         }
         Initialize();
         CheckStructure();
-        CheckSchemaAndRestructure();
     }
     ResetRegistry();  // clearing all remaining prepared statements;
     InitializeLocalVariables();
     if (isNewDatabase) {
         InitFunction();  // create userdefined functions - tables just created above.
+    } else if (checkAndCreate) {
+        CheckSchemaAndRestructure();
     }
     _dropAllObjects = false;
 }

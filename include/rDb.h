@@ -5,7 +5,13 @@
 #include <boost/tokenizer.hpp>
 #include <string>
 #include "wpSQLDatabase.h"
-#include "logging.hpp"
+#include "logger/logging.hpp"
+
+#ifndef DEF_EOFFIELDCHAR
+constexpr char EOFFIELDCHAR = 0x1E;
+constexpr char EOLINECHAR = 0x1F;
+#define DEF_EOFFIELDCHAR
+#endif
 
 using ConvertFunction = std::function<std::string(int, const std::string &)>;
 
@@ -174,15 +180,13 @@ namespace DB {
         virtual std::string Translate(const std::string &s) { return s; }
         virtual std::wstring Translate(const std::wstring &s) { return to_wstring(Translate(to_string(s))); }
 
-        std::string GetDayName(int i);
-        std::string GetMonthName(int i);
+        static std::string GetDayName(int i);
+        static std::string GetMonthName(int i);
 
-        virtual std::string GetResultTabDelimited(std::shared_ptr<wpSQLResultSet> rs, bool useActualTab = false, bool showColumnHeader = false) { return GetResultTabDelimited(rs, -1, useActualTab, showColumnHeader); }
-        virtual std::string GetResultTabDelimited(std::shared_ptr<wpSQLResultSet> rs, int nRows, bool useActualTab = false, bool showColumnHeader = false, const std::string &filename = "");
-        std::vector<std::vector<std::string>> GetVectorResult(std::shared_ptr<wpSQLResultSet> rs, int nRows = -1, bool showColumnHeader = false);
     };
 
     class UserDBRegistry {
+    protected:
         friend class SQLiteBase;
         SQLiteBase *sqlDB;
         std::unordered_map<std::string, int> autoLengthMap;
@@ -194,7 +198,6 @@ namespace DB {
         std::function<std::shared_ptr<wpSQLStatement>()> fn_sttEraseKey;
 
     public:
-        bool IsActivated(const std::string &key);
         UserDBRegistry(SQLiteBase *db);
         virtual ~UserDBRegistry() {}
         template<typename T = std::string> void SetKey(const std::string &key, const T &val) {
@@ -365,7 +368,7 @@ public:
     virtual ~TransactionDB() { Close(); }
     std::string GetMasterDBName() { return masterDB->GetDBName(); }
 
-    void CheckStructure() override { DB::SQLiteBase::CheckStructure(); }
+    void CheckStructure() override;
     void InitializeLocalVariables() override { DB::SQLiteBase::InitializeLocalVariables(); }
     void Initialize() override { DB::SQLiteBase::Initialize(); }
     virtual bool Migrate(DB::SQLiteBase *d, std::vector<std::string> &tableList);

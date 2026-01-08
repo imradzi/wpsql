@@ -7,7 +7,7 @@
 #include <boost/algorithm/string.hpp>
 #include <boost/make_shared.hpp>
 #include <boost/tokenizer.hpp>
-#include "logging.hpp"
+#include "logger/logging.hpp"
 #include "wpSQLDatabase.h"
 
 std::string BuildFTSSearch(const std::string& param) {
@@ -41,19 +41,8 @@ std::string FormatDateUTC(const std::chrono::system_clock::time_point &tp, const
     return oss.str();
 }
 
-// std::to_string(std::this_thread::get_id())
-
-#ifndef PPOS_DB
-std::string GetThreadID() {
-    std::ostringstream ss;
-    ss << std::this_thread::get_id();
-    return ss.str();
-}
-#endif
-
 wpSQLException::wpSQLException(const std::string m, int rc_, sqlite3 *db) : rc(rc_) {
-    message = fmt::format("[{thread}] {msg} :rc=[{rc}], sqlerror=[{sqlerror}] db=[{dbname}]",
-        fmt::arg("thread", GetThreadID()),
+    message = fmt::format("{msg} :rc=[{rc}], sqlerror=[{sqlerror}] db=[{dbname}]",
         fmt::arg("msg", m),
         fmt::arg("rc", rc),
         fmt::arg("sqlerror", (db ? sqlite3_errmsg(db) : "")),
@@ -317,6 +306,10 @@ int wpSQLDatabase::Execute(const std::string &sql, std::function<void(int, char 
                     auto v = fmt::format("Lock: not freed after {} sec. Error = {}", (noOfWaitingIteration * secPerSleep), (zErrMsg ? zErrMsg : ""));
                     if (zErrMsg) sqlite3_free(zErrMsg);
                     throw wpSQLException(v, SQLITE_BUSY, db->GetSQLite3());
+                }
+                if (zErrMsg) {
+                    sqlite3_free(zErrMsg);
+                    zErrMsg = NULL;
                 }
                 std::this_thread::yield();
                 std::this_thread::sleep_for(std::chrono::seconds(secPerSleep));

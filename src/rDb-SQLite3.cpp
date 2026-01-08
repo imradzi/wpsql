@@ -298,6 +298,7 @@ void DB::SQLiteBase::Open(bool checkAndCreate, OpenMode mode) {
         }
         Initialize();
         CheckStructure();
+        CheckSchemaAndRestructure();
     }
     ResetRegistry();  // clearing all remaining prepared statements;
     InitializeLocalVariables();

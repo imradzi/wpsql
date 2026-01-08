@@ -67,8 +67,6 @@ namespace DB {
     };
 
     class UserDBRegistry;
-    class SQLiteBase;
-
     class SQLiteBase {
     public:
         struct GetSequence {
@@ -116,7 +114,11 @@ namespace DB {
         }
         virtual bool IsSynchAble() { return false; }
         void ResetRegistry() { userDBregistry.reset(); }
-        virtual std::shared_ptr<DB::UserDBRegistry> GetRegistry();
+        virtual std::shared_ptr<UserDBRegistry> GetRegistry();
+
+        template<typename T> void SetKey(const std::string& key, const T& value);
+        template<typename T> T GetKey(const std::string& key, const T& defaultValue);
+
 
         bool IsOpened() { return db ? db->IsOpen() : false; }
         bool IsNewDatabase() { return isNewDatabase; }
@@ -334,13 +336,13 @@ namespace DB {
 
     class TypeRegistry {
     protected:
-        std::shared_ptr<DB::UserDBRegistry> reg;
+        std::shared_ptr<UserDBRegistry> reg;
         std::shared_ptr<wpSQLStatement> sttFindGroup, sttInsGroup;
         std::shared_ptr<wpSQLStatement> stt, insStt;
-        DB::SQLiteBase &d;
+        SQLiteBase &d;
 
     public:
-        TypeRegistry(DB::SQLiteBase &db);
+        TypeRegistry(SQLiteBase &db);
         std::string SetGroup(const std::string &regKey, const std::string &name);
         std::string Set(const std::string &regKey, const std::string &code, const std::string &name, const std::string &limit, const std::string &groupID, bool &isNew);
         std::string Set(const std::string &regKey, const std::string &code, const std::string &name, const std::string &limit, const std::string &groupID) {
@@ -355,6 +357,9 @@ namespace DB {
         void SetDefaultValue(const std::string &key, const std::string &value) { SetValue(key, "defaultvalue", value); }
         void SetLimitValue(const std::string &key, const std::string &value) { SetValue(key, "limitvalue", value); }
     };
+    
+    template<typename T> void SQLiteBase::SetKey(const std::string& key, const T& value) { GetRegistry()->SetKey<T>(key, value); }
+    template<typename T> T SQLiteBase::GetKey(const std::string& key, const T& defaultValue) { return GetRegistry()->GetKey<T>(key, defaultValue); }
 
 }  // namespace DB
 

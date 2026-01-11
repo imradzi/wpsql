@@ -37,6 +37,7 @@ add_library(wpSQL STATIC ${WPSQL_SOURCES} ${WPSQL_HEADERS})
 target_include_directories(wpSQL
     PUBLIC
         $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+        $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/logger>
         $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>
         $<INSTALL_INTERFACE:include>
 )

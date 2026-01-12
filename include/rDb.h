@@ -31,14 +31,23 @@ namespace DB {
         return std::wstring(joined.begin(), joined.end());
     }
 
-    template<typename T, typename V> bool contains(T list, V value) {
+    template<typename T, typename V>
+    bool contains(T list, V value) {
         for (auto x : list) {
             if (x == value) return true;
         }
         return false;
     }
 
-    enum ObjectType { EOT, Table, Function, Procedure, View, Index, Command, Constraint, Trigger };
+    enum ObjectType { EOT,
+        Table,
+        Function,
+        Procedure,
+        View,
+        Index,
+        Command,
+        Constraint,
+        Trigger };
 
     struct DBObjects {
         std::string objectName;
@@ -99,8 +108,9 @@ namespace DB {
         std::shared_ptr<wpSQLDatabase> db;
         bool dropAllObjects;
         bool isNewDatabase;
-        virtual std::vector<DB::DBObjects> objectList() const ;
+        virtual std::vector<DB::DBObjects> objectList() const;
         virtual bool Create();
+
     private:
         void CreateObject(const std::string &f, const DB::ObjectType ty, const std::vector<std::string> crSQL, bool dropIfExist = false, const std::string &replMaster = "", const std::string &replSibling = "");
         void CreateAllObjects(bool checkAndCreate, bool toExecuteCommand);
@@ -116,9 +126,10 @@ namespace DB {
         void ResetRegistry() { userDBregistry.reset(); }
         virtual std::shared_ptr<UserDBRegistry> GetRegistry();
 
-        template<typename T> void SetKey(const std::string& key, const T& value);
-        template<typename T> T GetKey(const std::string& key, const T& defaultValue);
-
+        template<typename T>
+        void SetKey(const std::string &key, const T &value);
+        template<typename T>
+        T GetKey(const std::string &key, const T &defaultValue);
 
         bool IsOpened() { return db ? db->IsOpen() : false; }
         bool IsNewDatabase() { return isNewDatabase; }
@@ -205,7 +216,8 @@ namespace DB {
     public:
         UserDBRegistry(SQLiteBase *db);
         virtual ~UserDBRegistry() {}
-        template<typename T = std::string> void SetKey(const std::string &key, const T &val) {
+        template<typename T = std::string>
+        void SetKey(const std::string &key, const T &val) {
             if (sqlDB->IsTableExist("ul_localkeys")) {
                 if (FindLocalKey(key)) {
                     SetLocalKey(key, val);
@@ -231,7 +243,8 @@ namespace DB {
         }
         virtual void EraseKey(const std::string &key);
 
-        template<typename T = std::string> void SetLocalKey(const std::string &key, const T &val) {
+        template<typename T = std::string>
+        void SetLocalKey(const std::string &key, const T &val) {
             try {
                 std::shared_ptr<wpSQLStatement> stt = fn_sttFindLocalKey();
                 if (!stt) return;
@@ -248,14 +261,17 @@ namespace DB {
                     sttInsertLocalKey->Bind(2, val);
                     sttInsertLocalKey->ExecuteUpdate();
                 }
-            } catch (wpSQLException &e) { LOG_ERROR(e.message); } catch (...) {
+            } catch (wpSQLException &e) {
+                LOG_ERROR(e.message);
+            } catch (...) {
                 LOG_ERROR("???");
             }
         }
 
         virtual void EraseLocalKey(const std::string &key);
 
-        template<typename T = std::string> T GetKey(const std::string &key, const T &defaultKey = {}) {
+        template<typename T = std::string>
+        T GetKey(const std::string &key, const T &defaultKey = {}) {
             T res {};
             if (FindLocalKey(key, res)) return res;
             // res is empty at this point.
@@ -269,7 +285,8 @@ namespace DB {
                 SetKey(key, defaultKey);
             return defaultKey;
         }
-        template<typename T = std::string> T GetLocalKey(const std::string &key, const T &defaultKey = {}) {
+        template<typename T = std::string>
+        T GetLocalKey(const std::string &key, const T &defaultKey = {}) {
             if (sqlDB->IsTableExist("ul_localkeys")) {
                 std::shared_ptr<wpSQLStatement> stt = fn_sttFindLocalKey();
                 stt->Bind(1, key);
@@ -281,7 +298,8 @@ namespace DB {
             return defaultKey;
         }
 
-        template<typename T> std::vector<T> GetStringList(const T &key) {
+        template<typename T>
+        std::vector<T> GetStringList(const T &key) {
             std::vector<T> res;
             std::string t = GetKey(to_string(key));
             if (t.empty()) return res;
@@ -295,7 +313,8 @@ namespace DB {
             return res;
         }
 
-        template<typename T> std::vector<T> GetLocalStringList(const T &key) {
+        template<typename T>
+        std::vector<T> GetLocalStringList(const T &key) {
             std::vector<T> res;
             std::string t = GetLocalKey(to_string(key));
             if (t.empty()) return res;
@@ -310,7 +329,8 @@ namespace DB {
         }
 
         bool FindLocalKey(const std::string &key);
-        template<typename T> bool FindLocalKey(const std::string &key, T &res) {
+        template<typename T>
+        bool FindLocalKey(const std::string &key, T &res) {
             if (!sqlDB->IsTableExist("ul_localkeys")) return false;
             std::shared_ptr<wpSQLStatement> stt = fn_sttFindLocalKey();
             stt->Bind(1, key);
@@ -360,9 +380,11 @@ namespace DB {
         void SetDefaultValue(const std::string &key, const std::string &value) { SetValue(key, "defaultvalue", value); }
         void SetLimitValue(const std::string &key, const std::string &value) { SetValue(key, "limitvalue", value); }
     };
-    
-    template<typename T> void SQLiteBase::SetKey(const std::string& key, const T& value) { GetRegistry()->SetKey<T>(key, value); }
-    template<typename T> T SQLiteBase::GetKey(const std::string& key, const T& defaultValue) { return GetRegistry()->GetKey<T>(key, defaultValue); }
+
+    template<typename T>
+    void SQLiteBase::SetKey(const std::string &key, const T &value) { GetRegistry()->SetKey<T>(key, value); }
+    template<typename T>
+    T SQLiteBase::GetKey(const std::string &key, const T &defaultValue) { return GetRegistry()->GetKey<T>(key, defaultValue); }
 
 }  // namespace DB
 

@@ -184,7 +184,10 @@ namespace DB {
 
         static std::string GetDayName(int i);
         static std::string GetMonthName(int i);
-
+        virtual std::string GetDatabaseIdentity() {
+            LOG_WARN("GetDatabaseIdentity at root level: SHOULD NOT ALLOW");
+            return thisServerID();
+        }
     };
 
     class UserDBRegistry {

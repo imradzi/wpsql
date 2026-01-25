@@ -1,62 +1,71 @@
 cmake_minimum_required(VERSION 4.0)
-project(wpSQL VERSION 1.0.0 LANGUAGES C CXX)
 
-set(CMAKE_CXX_STANDARD 23)
-set(CMAKE_CXX_STANDARD_REQUIRED ON)
+# Allow standalone build or as subdirectory
+if(CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
+    project(wpSQL VERSION 1.0.0 LANGUAGES C CXX)
+    set(CMAKE_CXX_STANDARD 23)
+    set(CMAKE_CXX_STANDARD_REQUIRED ON)
+    set(WPSQL_STANDALONE TRUE)
+else()
+    set(WPSQL_STANDALONE FALSE)
+endif()
 
-# Library sources
+# Library sources (logger is external)
 set(WPSQL_SOURCES
-    src/checkSchema.cpp
-    src/dbbackup.cpp
-    src/lockTimeout.cpp
-    logger/logging.cpp
-    logger/logger.cpp
-    src/rDb.cpp
-    src/rDb-SQLite3.cpp
-    src/timefunctions.cpp
-    src/wpSQLDatabase.cpp
-    src/sqlite3/sqlite3.c
-    src/ZIP.cpp
-    src/ulid.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/checkSchema.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/dbbackup.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/lockTimeout.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/rDb.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/rDb-SQLite3.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/timefunctions.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/wpSQLDatabase.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/sqlite3/sqlite3.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/ZIP.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/ulid.cpp
 )
 
 # Library headers
 set(WPSQL_HEADERS
-    logger/logging.hpp
-    logger/logger.h
-    include/rDb.h
-    include/ulid.hpp
-    include/timefunctions.h
-    include/wpSQLDatabase.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/include/rDb.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/include/ulid.hpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/include/timefunctions.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/include/wpSQLDatabase.h
 )
+
+# Handle logger dependency
+if(WPSQL_STANDALONE)
+    # When building standalone, use the logger submodule
+    add_subdirectory(logger)
+endif()
+# When built as part of parent project, logger target should already exist
 
 # Create the wpSQL library
 add_library(wpSQL STATIC ${WPSQL_SOURCES} ${WPSQL_HEADERS})
 
 # Set include directories for the library
+# PUBLIC: consumers of wpSQL will also get these include paths
 target_include_directories(wpSQL
     PUBLIC
         $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
-        $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/logger>
+        $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include/sqlite3>
         $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>
         $<INSTALL_INTERFACE:include>
 )
 
 # Set compile definitions for SQLite and other features
-target_compile_definitions(wpSQL PUBLIC 
-    SQLITE_ENABLE_FTS5 
-    SQLITE_ENABLE_FTS4 
+target_compile_definitions(wpSQL PUBLIC
+    SQLITE_ENABLE_FTS5
+    SQLITE_ENABLE_FTS4
     PARTIO_USE_ZLIB
 )
-
-# Find spdlog
-find_package(spdlog REQUIRED)
 
 # Link against pthread if needed
 find_package(Threads REQUIRED)
 
-# Link SQLite3 (using the embedded sqlite3.c in the library) and math library
-target_link_libraries(wpSQL PUBLIC Threads::Threads spdlog::spdlog ${CMAKE_DL_LIBS} m)
+# Link dependencies (logger provides spdlog transitively)
+target_link_libraries(wpSQL PUBLIC Threads::Threads logger ${CMAKE_DL_LIBS} m)
 
-# Add the sample subdirectory
-add_subdirectory(sample)
+# Add sample subdirectory only for standalone builds
+if(WPSQL_STANDALONE)
+    add_subdirectory(sample)
+endif()

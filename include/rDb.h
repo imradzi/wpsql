@@ -15,6 +15,12 @@ constexpr char EOLINECHAR = 0x1F;
 
 using ConvertFunction = std::function<std::string(int, const std::string &)>;
 
+// In ppos project, thisServerID is a UniversalUniqueID variable (with operator())
+// For standalone wpSQL builds, declare it as a function
+#ifndef PPOS_DB
+extern std::string thisServerID();
+#endif
+
 namespace DB {
     class SQLiteBase;
 }

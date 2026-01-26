@@ -15,12 +15,6 @@ constexpr char EOLINECHAR = 0x1F;
 
 using ConvertFunction = std::function<std::string(int, const std::string &)>;
 
-// In ppos project, thisServerID is a UniversalUniqueID variable (with operator())
-// For standalone wpSQL builds, declare it as a function
-#ifndef PPOS_DB
-extern std::string thisServerID();
-#endif
-
 namespace DB {
     class SQLiteBase;
 }
@@ -203,7 +197,7 @@ namespace DB {
         static std::string GetMonthName(int i);
         virtual std::string GetDatabaseIdentity() {
             LOG_WARN("GetDatabaseIdentity at root level: SHOULD NOT ALLOW");
-            return thisServerID();
+            return "";
         }
     };
 

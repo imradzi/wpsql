@@ -63,7 +63,10 @@ target_compile_definitions(wpSQL PUBLIC
 find_package(Threads REQUIRED)
 
 # Link dependencies (logger provides spdlog transitively)
-target_link_libraries(wpSQL PUBLIC Threads::Threads logger ${CMAKE_DL_LIBS} m)
+target_link_libraries(wpSQL PUBLIC Threads::Threads logger ${CMAKE_DL_LIBS})
+if(NOT MSVC)
+    target_link_libraries(wpSQL PUBLIC m)
+endif()
 
 # Add sample subdirectory only for standalone builds
 if(WPSQL_STANDALONE)

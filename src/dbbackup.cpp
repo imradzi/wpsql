@@ -86,6 +86,7 @@ bool DB::SQLiteBase::BackupDB(int noOfBackupToKeep, std::string folderName, std:
                 LOG_INFO("Zipping {} {}", folderName, fileName);
                 size_t size {50000};
                 while (!in.eof()) {
+                    if (fnIsStopping && fnIsStopping()) { delete o; return false; }
                     std::string buf(size, '\0');
                     in.read(&buf[0], size);
                     o->write(buf.data(), in.gcount());
@@ -93,12 +94,14 @@ bool DB::SQLiteBase::BackupDB(int noOfBackupToKeep, std::string folderName, std:
                 o->flush();
                 delete o;
             }
+            if (fnIsStopping && fnIsStopping()) return false;
             {
                 std::ostream* o = zip.Add_File(tFileName);
                 std::ifstream in(folderName + tFileName, std::ios::in | std::ios::binary);
                 LOG_INFO("Zipping {} {}", folderName, tFileName);
                 size_t size {50000};
                 while (!in.eof()) {
+                    if (fnIsStopping && fnIsStopping()) { delete o; return false; }
                     std::string buf(size, '\0');
                     in.read(&buf[0], size);
                     o->write(buf.data(), in.gcount());

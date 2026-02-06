@@ -512,7 +512,7 @@ auto setTimeZero(sqlite3_context *ctx, int argc, sqlite3_value **data) -> void {
             v = GetBeginOfDay(v);
         }
     } catch (std::bad_cast &e) {
-        LOG_ERROR(fmt::format("setTimeZero: bad_cast --> {}", e.what()));
+        LOG_ERROR("setTimeZero: bad_cast --> {}", e.what());
     } catch (...) {
         LOG_ERROR("setTimeZero: unknown exception");
     }

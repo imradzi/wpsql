@@ -142,6 +142,7 @@ bool DB::SQLiteBase::BackupDB(int noOfBackupToKeep, std::string folderName, std:
         if (needTrimWeekly)
             DoTrimWeeklyFolder(folderName + std::string("Weekly") + std::string(1, fs::path::preferred_separator));
         LogStrFile(folderName + "finish.txt", startBackupStr);
+        LOG_INFO("Backup completed. {}", startBackupStr);
         return true;
     } catch (std::exception& e) {
         LOG_ERROR("Backup error: {}", e.what());

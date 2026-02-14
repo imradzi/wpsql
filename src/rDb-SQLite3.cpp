@@ -233,12 +233,10 @@ void DB::SQLiteBase::CreateObject(const std::string &objectName, const DB::Objec
 
 void DB::SQLiteBase::TruncateAllTables() {
     std::shared_ptr<wpSQLResultSet> rs = GetSession().ExecuteQuery("select name from sqlite_master where type='table'");
-    auto _x = GetSession().GetAutoCommitter();
     while (rs->NextRow()) {
         std::string tabName = rs->Get(0);
         GetSession().ExecuteUpdate(fmt::format("delete from {}", tabName));
     }
-    _x->SetOK();
 }
 
 void DB::SQLiteBase::DropAllTables() {

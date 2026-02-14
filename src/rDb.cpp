@@ -50,11 +50,9 @@ std::string DB::TypeRegistry::SetGroup(const std::string &regKey,
     id = rs->Get(0);
   }
   if (id.empty()) {
-    auto _x = d.GetSession().GetAutoCommitter();
     sttInsGroup->Bind(1, name);
     sttInsGroup->ExecuteUpdate();
     id = d.GetSession().GetLastRowId<std::string>();
-    _x->SetOK();
   }
   reg->SetKey(regKey, id);
   return id;

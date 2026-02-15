@@ -130,6 +130,7 @@ namespace DB {
         void SetKey(const std::string &key, const T &value);
         template<typename T>
         T GetKey(const std::string &key, const T &defaultValue);
+        inline bool IsKeyExists(const std::string &key, bool isLocalKey = false);
 
         bool IsOpened() { return db ? db->IsOpen() : false; }
         bool IsNewDatabase() { return isNewDatabase; }
@@ -385,6 +386,7 @@ namespace DB {
     void SQLiteBase::SetKey(const std::string &key, const T &value) { GetRegistry()->SetKey<T>(key, value); }
     template<typename T>
     T SQLiteBase::GetKey(const std::string &key, const T &defaultValue) { return GetRegistry()->GetKey<T>(key, defaultValue); }
+    bool SQLiteBase::IsKeyExists(const std::string &key, bool isLocalKey) { return GetRegistry()->IsKeyExists(key, isLocalKey); }
 
 }  // namespace DB
 

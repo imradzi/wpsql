@@ -78,14 +78,6 @@ namespace DB {
     class UserDBRegistry;
     class SQLiteBase {
     public:
-        struct GetSequence {
-            int64_t seqNo;
-            std::string prevNo;
-
-        public:
-            GetSequence(int64_t ll, const std::string &v) : seqNo(ll), prevNo(v) {}
-        };
-        GetSequence getSequence;
         bool turnOffSynchronize;
         bool exclusiveMode;
         bool usingWAL;

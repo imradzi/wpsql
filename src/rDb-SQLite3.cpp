@@ -80,8 +80,7 @@ bool DB::SQLiteBase::Create() {
 }
 
 DB::SQLiteBase::SQLiteBase(const std::string &dbName, bool _turnOffSync, bool _isExclusive, bool _usingWAL, bool journal)
-  : getSequence(0LL, ""),
-    turnOffSynchronize(_turnOffSync),
+  : turnOffSynchronize(_turnOffSync),
     exclusiveMode(_isExclusive),
     usingWAL(_usingWAL),
     journalOff(journal),
@@ -104,8 +103,7 @@ DB::SQLiteBase::SQLiteBase(const std::string &dbName, bool _turnOffSync, bool _i
     }
 }
 
-DB::SQLiteBase::SQLiteBase() : getSequence(0LL, ""),
-                               turnOffSynchronize(false),
+DB::SQLiteBase::SQLiteBase() : turnOffSynchronize(false),
                                exclusiveMode(false),
                                journalOff(false),
                                isAggregatedDB(false),
@@ -439,56 +437,6 @@ auto tokenizer(sqlite3_context *ctx, int argc, sqlite3_value **data) -> void {
     }
 }
 
-auto settoken(sqlite3_context *ctx, int argc, sqlite3_value **data) -> void {
-    try {
-        std::string res;
-        if (argc == 3) {
-            std::string s = (const char *)sqlite3_value_text(data[0]);
-            int idx = sqlite3_value_int(data[1]);  // zero based index;
-            std::string newVal = (const char *)sqlite3_value_text(data[2]);
-            std::string delim;
-            boost::tokenizer<boost::char_separator<char>> tok(s, boost::char_separator<char>(attributeMark_delimiter, "", boost::keep_empty_tokens));
-            int i = 0;
-            for (auto it = tok.begin(); it != tok.end(); it++, i++) {
-                std::string v;
-                if (i == idx) v = newVal;
-                res.append(delim);
-                res.append(v);
-                delim = attributeMark_delimiter;
-            }
-        } else
-            res = (const char *)sqlite3_value_text(data[0]);
-
-        sqlite3_result_text(ctx, res.c_str(), -1, SQLITE_TRANSIENT);
-    } catch (...) {
-        LOG_ERROR("settoken: throw exception");
-    }
-}
-
-auto getSequenceNo(sqlite3_context *ctx, int argc, sqlite3_value **data) -> void {
-    try {
-        auto db = (DB::SQLiteBase *)sqlite3_user_data(ctx);
-        int64_t ofs = 0;
-        std::string prev;
-        if (argc == 0)
-            db->getSequence.seqNo++;
-        else if (argc == 1) {
-            ofs = sqlite3_value_int64(data[0]);
-            db->getSequence.seqNo++;
-        } else if (argc > 1) {
-            prev = (const char *)sqlite3_value_text(data[0]);
-            ofs = sqlite3_value_int64(data[1]);
-            if (prev != db->getSequence.prevNo)
-                db->getSequence.seqNo++;
-            else
-                db->getSequence.prevNo = prev;
-        }
-        sqlite3_result_int64(ctx, db->getSequence.seqNo + ofs);
-    } catch (...) {
-        LOG_ERROR("getSequenceNo: throw exception");
-    }
-}
-
 auto getDayName(sqlite3_context *ctx, int argc, sqlite3_value **data) -> void {
     try {
         auto db = (DB::SQLiteBase *)sqlite3_user_data(ctx);
@@ -551,8 +499,6 @@ void DB::SQLiteBase::InitFunction() {
     GetSession().CreateFunction("agemonth", 1, getAgeInMonth);
     GetSession().CreateFunction("fillzero", 2, fillZero);
     GetSession().CreateFunction("gettoken", 2, tokenizer);
-    GetSession().CreateFunction("settoken", 3, settoken);
-    GetSession().CreateFunction("seqno", -1, getSequenceNo, this);
     GetSession().CreateFunction("getdayname", 1, getDayName, this);
     GetSession().CreateFunction("removetime", 1, setTimeZero);
     GetSession().CreateFunction("formatnumber", 1, formatNumber);

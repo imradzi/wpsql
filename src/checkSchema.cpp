@@ -51,9 +51,7 @@ void DB::SQLiteBase::RestructureTable(const std::string &tabName, const DB::DBOb
             GetSession().ExecuteUpdate(insSQL);
             GetSession().ExecuteUpdate("drop table " + oldName);
         }
-    } catch (wpSQLException &e) {
-        LOG_ERROR("RestructureTable: error = {}", e.message);
-    } catch (std::exception &e) {
+    } catch (const std::exception &e) {
         LOG_ERROR("RestructureTable: error = {}", e.what());
     }
 }
@@ -181,9 +179,7 @@ void DB::SQLiteBase::CheckSchemaAndRestructure() {
                 LOG_INFO("Dropping... {}", tabName);
                 GetSession().ExecuteUpdate(fmt::format("drop table {}", tabName));
                 nDropped++;
-            } catch (wpSQLException &e) {
-                LOG_ERROR("Failed to drop {} : {}", tabName, e.message);
-            } catch (std::exception &e) {
+            } catch (const std::exception &e) {
                 LOG_ERROR("Failed to drop {} : {}", tabName, e.what());
             }
         }

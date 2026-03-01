@@ -41,23 +41,11 @@ std::string FormatDateUTC(const std::chrono::system_clock::time_point &tp, const
     return oss.str();
 }
 
-wpSQLException::wpSQLException(const std::string m, int rc_, sqlite3 *db) : rc(rc_) {
-    message = fmt::format("{msg} :rc=[{rc}], sqlerror=[{sqlerror}] db=[{dbname}]",
-        fmt::arg("msg", m),
-        fmt::arg("rc", rc),
-        fmt::arg("sqlerror", (db ? sqlite3_errmsg(db) : "")),
-        fmt::arg("dbname", (db ? sqlite3_db_filename(db, "main") : "name?"))
-    );
-}
-
 wpAutoCommitter::wpAutoCommitter(wpSQLDatabase *a) : toRollBack(true), db(a) {
     try {
         isAuto = db->IsAutoCommit();
         if (isAuto) db->Begin();
-    } catch (wpSQLException &e) {
-        toRollBack = true;
-        throw(e);
-    } catch (std::exception &e) {
+    } catch (const std::exception &e) {
         toRollBack = true;
         throw(e);
     } catch (...) {
@@ -419,7 +407,7 @@ void wpSQLDatabase::register_function(sqlite3_context *ctx, int argc, sqlite3_va
                 throw wpSQLException("register_function return NULL lambda", 0, nullptr);
         } else
             throw wpSQLException("register_function: return NULL from sqlite3_user_data(context)", 0, nullptr);
-    } catch (std::bad_cast &e) {
+    } catch (const std::bad_cast &e) {
         throw wpSQLException(fmt::format("wpSQLDatabase::register_function: throw std::bad_cast {}", e.what()), 0, nullptr);
     }
 }

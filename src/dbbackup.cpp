@@ -144,10 +144,8 @@ bool DB::SQLiteBase::BackupDB(int noOfBackupToKeep, std::string folderName, std:
         LogStrFile(folderName + "finish.txt", startBackupStr);
         LOG_INFO("Backup completed. {}", startBackupStr);
         return true;
-    } catch (std::exception& e) {
+    } catch (const std::exception& e) {
         LOG_ERROR("Backup error: {}", e.what());
-    } catch (wpSQLException& e) {
-        LOG_ERROR("Backup sql error: {}", e.message);
     } catch (...) {
         LOG_ERROR("Backup error: unknown!");
     }

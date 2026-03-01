@@ -223,8 +223,8 @@ void DB::SQLiteBase::CreateObject(const std::string &objectName, const DB::Objec
                 }
             }
         }
-    } catch (wpSQLException &e) {
-        LOG_ERROR("Error opening {}: {}", _dbName, e.message);
+    } catch (const std::exception &e) {
+        LOG_ERROR("Error opening {}: {}", _dbName, e.what());
         exit(-1);
     }
 }
@@ -269,42 +269,50 @@ int DB::SQLiteBase::ProcessBusyHandler(int nTimesCalled) {  // 0-nomore wait; no
 }
 
 void DB::SQLiteBase::Open(bool checkAndCreate, OpenMode mode) {
-    openMode = mode;
-    bool toExecuteCommand = isNewDatabase = false;
-    if (boost::iequals(_dbName, ":memory:"))
-        toExecuteCommand = isNewDatabase = true;
-    else
-        toExecuteCommand = isNewDatabase = !std::filesystem::exists(_dbName);
-    if (toExecuteCommand) mode = OpenMode::ReadWrite;
-    db->Open(_dbName, openMode);
-    auto autocomm = GetSession().GetAutoCommitter();
-    if (journalOff)
-        db->ExecuteUpdate("PRAGMA journal_mode=OFF");
-    else if (usingWAL)
-        db->ExecuteUpdate("PRAGMA journal_mode=WAL");
-    if (turnOffSynchronize) db->ExecuteUpdate("PRAGMA synchronous=off");
-    if (exclusiveMode) db->ExecuteUpdate("PRAGMA locking_mode=EXCLUSIVE");
+    try {
+        openMode = mode;
+        bool toExecuteCommand = isNewDatabase = false;
+        if (boost::iequals(_dbName, ":memory:"))
+            toExecuteCommand = isNewDatabase = true;
+        else
+            toExecuteCommand = isNewDatabase = !std::filesystem::exists(_dbName);
+        if (toExecuteCommand) mode = OpenMode::ReadWrite;
+        db->Open(_dbName, openMode);
+        if (journalOff)
+            db->ExecuteUpdate("PRAGMA journal_mode=OFF");
+        else if (usingWAL)
+            db->ExecuteUpdate("PRAGMA journal_mode=WAL");
+        if (turnOffSynchronize) db->ExecuteUpdate("PRAGMA synchronous=off");
+        if (exclusiveMode) db->ExecuteUpdate("PRAGMA locking_mode=EXCLUSIVE");
 
-    if (!isNewDatabase) {
-        InitFunction();  // create userdefined functions - tables already exists;
-    }
-    if ((checkAndCreate || toExecuteCommand) && mode == OpenMode::ReadWrite) {
-        CreateAllObjects(checkAndCreate, toExecuteCommand);
-        if (toExecuteCommand) {
-            PopulateTables();  // only executed once, first time created.
+        auto autocomm = GetSession().GetAutoCommitter();
+        if (!isNewDatabase) {
+            InitFunction();  // create userdefined functions - tables already exists;
         }
-        Initialize();
-        CheckStructure();
+        if ((checkAndCreate || toExecuteCommand) && mode == OpenMode::ReadWrite) {
+            CreateAllObjects(checkAndCreate, toExecuteCommand);
+            if (toExecuteCommand) {
+                PopulateTables();  // only executed once, first time created.
+            }
+            Initialize();
+            CheckStructure();
+        }
+        ResetRegistry();  // clearing all remaining prepared statements;
+        InitializeLocalVariables();
+        if (isNewDatabase) {
+            InitFunction();  // create userdefined functions - tables just created above.
+        } else if (checkAndCreate) {
+            CheckSchemaAndRestructure();
+        }
+        autocomm->SetOK();
+        _dropAllObjects = false;
+    } catch (const std::exception &e) {
+        LOG_ERROR("Error opening {}: {}", _dbName, e.what());
+        exit(-1);
+    } catch (...) {
+        LOG_ERROR("Error opening {}: unknown error", _dbName);
+        exit(-1);
     }
-    ResetRegistry();  // clearing all remaining prepared statements;
-    InitializeLocalVariables();
-    if (isNewDatabase) {
-        InitFunction();  // create userdefined functions - tables just created above.
-    } else if (checkAndCreate) {
-        CheckSchemaAndRestructure();
-    }
-    autocomm->SetOK();
-    _dropAllObjects = false;
 }
 
 void DB::SQLiteBase::Close() {
@@ -422,7 +430,7 @@ auto tokenizer(sqlite3_context *ctx, int argc, sqlite3_value **data) -> void {
                 std::string str {s};
                 boost::tokenizer<boost::char_separator<char>> tok(str, boost::char_separator<char>(attributeMark_delimiter, "", boost::keep_empty_tokens));
                 int i = 0;
-                for (const auto& it : tok) {
+                for (const auto &it : tok) {
                     if (i == idx) {
                         v = it;
                         break;
@@ -459,7 +467,7 @@ auto setTimeZero(sqlite3_context *ctx, int argc, sqlite3_value **data) -> void {
             v = to_chrono(sqlite3_value_int64(data[0]));
             v = GetBeginOfDay(v);
         }
-    } catch (std::bad_cast &e) {
+    } catch (const std::bad_cast &e) {
         LOG_ERROR("setTimeZero: bad_cast --> {}", e.what());
     } catch (...) {
         LOG_ERROR("setTimeZero: unknown exception");
@@ -667,7 +675,6 @@ void TransactionDB::CheckStructure() {
     DB::SQLiteBase::CheckStructure();
 }
 
-
 bool TransactionDB::AttachMasterDB() {
     bool found = false;
     GetSession().Execute("pragma database_list", [&found](int, char **data, char **) {
@@ -769,12 +776,12 @@ bool TransactionDB::Migrate(DB::SQLiteBase *master, std::vector<std::string> &tL
                 }
             }
             _x->SetOK();
-        } catch (wpSQLException &e) {
-            LOG_ERROR("wpSQLException {}", e.message);
-            return false;
-        } catch (std::exception &e) {
+        } catch (const std::exception &e) {
             LOG_ERROR("std::exception {}", e.what());
             return false;
+        } catch (...) {
+            LOG_ERROR("unknown exception");
+            return false; 
         }
     }
     LOG_INFO("Migration from {} to {} completed.", master->GetDBName(), GetDBName());

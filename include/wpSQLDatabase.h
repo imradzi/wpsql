@@ -180,12 +180,15 @@ inline google::protobuf::Timestamp get_ts_value(const TimePoint &t) { return get
 
 const void *GetSQLFunctionParamBlob(sqlite3_value *data, int &len);
 
-struct wpSQLException {
-    std::string message;
-    int rc;
-
+struct wpSQLException : public std::runtime_error {
 public:
-    wpSQLException(const std::string m, int rc_, sqlite3 *db);
+    wpSQLException(const std::string m, int rc_, sqlite3 *db)
+      : std::runtime_error(fmt::format("{msg} :rc=[{rc}], sqlerror=[{sqlerror}] db=[{dbname}]",
+            fmt::arg("msg", m),
+            fmt::arg("rc", rc_),
+            fmt::arg("sqlerror", (db ? sqlite3_errmsg(db) : "")),
+            fmt::arg("dbname", (db ? sqlite3_db_filename(db, "main") : "name?")))) {
+    }
 };
 
 class wpSQLManager {

@@ -37,9 +37,7 @@ void TestLock() {
                 dbInner.GetSession().Commit();
                 std::cout << "TestLock:Inner. commit transaction." << std::endl;
                 dbInner.Close();
-            } catch (wpSQLException& e) {
-                std::cout << fmt::format("TestLock:Inner sql exception: {}", e.message) << std::endl;
-            } catch (std::exception& e) {
+            } catch (const std::exception& e) {
                 std::cout << fmt::format("TestLock:Inner std exception: {}", e.what()) << std::endl;
             } catch (...) {
                 std::cout << "TestLock:Inner unknown exception" << std::endl;
@@ -56,9 +54,7 @@ void TestLock() {
         testDB.Close();
         thr.join();
 
-    } catch (wpSQLException& e) {
-        std::cout << fmt::format("TestLock:main sql exception: {}", e.message) << std::endl;
-    } catch (std::exception& e) {
+    } catch (const std::exception& e) {
         std::cout << fmt::format("TestLock:main std exception: {}", e.what()) << std::endl;
     } catch (...) {
         std::cout << "TestLock:main unknown exception" << std::endl;

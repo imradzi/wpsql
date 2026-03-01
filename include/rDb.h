@@ -254,8 +254,8 @@ namespace DB {
                     sttInsertLocalKey->Bind(2, val);
                     sttInsertLocalKey->ExecuteUpdate();
                 }
-            } catch (wpSQLException &e) {
-                LOG_ERROR(e.message);
+            } catch (const std::exception &e) {
+                LOG_ERROR(e.what());
             } catch (...) {
                 LOG_ERROR("???");
             }

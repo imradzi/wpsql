@@ -318,8 +318,10 @@ void DB::SQLiteBase::CreateAllObjects(bool checkAndCreate, bool toExecuteCommand
     for (auto const &p : list) {
         if (p.objectType == DB::Command) {
             if (toExecuteCommand) CreateObject(p.objectName, p.objectType, p.createSQL, false, _masterName, _siblingName);
-        } else
+        } else {
+            LOG_INFO("Creating {} {}", p.objectType == DB::Table ? "table" : p.objectType == DB::View ? "view" : p.objectType == DB::Index ? "index" : "trigger", p.objectName);
             CreateObject(p.objectName, p.objectType, p.createSQL, _dropAllObjects, _masterName, _siblingName);
+        }
     }
 }
 

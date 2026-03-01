@@ -55,7 +55,11 @@ wpAutoCommitter::wpAutoCommitter(wpSQLDatabase *a) : toRollBack(true), db(a) {
 }
 
 wpAutoCommitter::~wpAutoCommitter() {
-    if (isAuto && !toRollBack) db->Commit();
+    try {
+        if (isAuto && !toRollBack) db->Commit();
+    } catch (...) {
+        LOG_WARN("wpAutoCommitter: commit failed in destructor");
+    }
 }
 
 const void *GetSQLFunctionParamBlob(sqlite3_value *data, int &len) {

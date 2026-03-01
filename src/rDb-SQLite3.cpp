@@ -285,26 +285,29 @@ void DB::SQLiteBase::Open(bool checkAndCreate, OpenMode mode) {
         if (turnOffSynchronize) db->ExecuteUpdate("PRAGMA synchronous=off");
         if (exclusiveMode) db->ExecuteUpdate("PRAGMA locking_mode=EXCLUSIVE");
 
-        auto autocomm = GetSession().GetAutoCommitter();
-        if (!isNewDatabase) {
-            InitFunction();  // create userdefined functions - tables already exists;
-        }
-        if ((checkAndCreate || toExecuteCommand) && mode == OpenMode::ReadWrite) {
-            CreateAllObjects(checkAndCreate, toExecuteCommand);
-            if (toExecuteCommand) {
-                PopulateTables();  // only executed once, first time created.
+        {
+            auto autocomm = GetSession().GetAutoCommitter();
+            if (!isNewDatabase) {
+                InitFunction();  // create userdefined functions - tables already exists;
             }
-            Initialize();
-            CheckStructure();
+            if ((checkAndCreate || toExecuteCommand) && mode == OpenMode::ReadWrite) {
+                CreateAllObjects(checkAndCreate, toExecuteCommand);
+                if (toExecuteCommand) {
+                    PopulateTables();  // only executed once, first time created.
+                }
+                Initialize();
+                CheckStructure();
+            }
+            ResetRegistry();  // clearing all remaining prepared statements;
+            InitializeLocalVariables();
+            if (isNewDatabase) {
+                InitFunction();  // create userdefined functions - tables just created above.
+            }
+            autocomm->SetOK();
         }
-        ResetRegistry();  // clearing all remaining prepared statements;
-        InitializeLocalVariables();
-        if (isNewDatabase) {
-            InitFunction();  // create userdefined functions - tables just created above.
-        } else if (checkAndCreate) {
+        if (!isNewDatabase && checkAndCreate) {
             CheckSchemaAndRestructure();
         }
-        autocomm->SetOK();
         _dropAllObjects = false;
     } catch (const std::exception &e) {
         LOG_ERROR("Error opening {}: {}", _dbName, e.what());

@@ -277,7 +277,7 @@ void DB::SQLiteBase::Open(bool checkAndCreate, OpenMode mode) {
         toExecuteCommand = isNewDatabase = !std::filesystem::exists(_dbName);
     if (toExecuteCommand) mode = OpenMode::ReadWrite;
     db->Open(_dbName, openMode);
-
+    auto autocomm = GetSession().GetAutoCommitter();
     if (journalOff)
         db->ExecuteUpdate("PRAGMA journal_mode=OFF");
     else if (usingWAL)
@@ -303,6 +303,7 @@ void DB::SQLiteBase::Open(bool checkAndCreate, OpenMode mode) {
     } else if (checkAndCreate) {
         CheckSchemaAndRestructure();
     }
+    autocomm->SetOK();
     _dropAllObjects = false;
 }
 
@@ -319,7 +320,6 @@ void DB::SQLiteBase::CreateAllObjects(bool checkAndCreate, bool toExecuteCommand
         if (p.objectType == DB::Command) {
             if (toExecuteCommand) CreateObject(p.objectName, p.objectType, p.createSQL, false, _masterName, _siblingName);
         } else {
-            LOG_INFO("Creating {} {}", p.objectType == DB::Table ? "table" : p.objectType == DB::View ? "view" : p.objectType == DB::Index ? "index" : "trigger", p.objectName);
             CreateObject(p.objectName, p.objectType, p.createSQL, _dropAllObjects, _masterName, _siblingName);
         }
     }

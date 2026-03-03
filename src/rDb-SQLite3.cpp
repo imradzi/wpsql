@@ -286,24 +286,24 @@ void DB::SQLiteBase::Open(bool checkAndCreate, OpenMode mode) {
         if (exclusiveMode) db->ExecuteUpdate("PRAGMA locking_mode=EXCLUSIVE");
 
         {
-            auto autocomm = GetSession().GetAutoCommitter();
             if (!isNewDatabase) {
                 InitFunction();  // create userdefined functions - tables already exists;
             }
             if ((checkAndCreate || toExecuteCommand) && mode == OpenMode::ReadWrite) {
+                auto autocomm = GetSession().GetAutoCommitter();
                 CreateAllObjects(checkAndCreate, toExecuteCommand);
                 if (toExecuteCommand) {
                     PopulateTables();  // only executed once, first time created.
                 }
                 Initialize();
                 CheckStructure();
+                autocomm->SetOK();
             }
             ResetRegistry();  // clearing all remaining prepared statements;
             InitializeLocalVariables();
             if (isNewDatabase) {
                 InitFunction();  // create userdefined functions - tables just created above.
             }
-            autocomm->SetOK();
         }
         if (!isNewDatabase && checkAndCreate) {
             CheckSchemaAndRestructure();

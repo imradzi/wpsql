@@ -57,6 +57,7 @@ target_compile_definitions(wpSQL PUBLIC
     SQLITE_ENABLE_FTS5
     SQLITE_ENABLE_FTS4
     PARTIO_USE_ZLIB
+    SPDLOG_FMT_EXTERNAL
 )
 
 # Link against pthread if needed

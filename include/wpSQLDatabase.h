@@ -71,9 +71,10 @@ template<typename T> std::string to_string(const T &v) {
 extern std::string BuildFTSSearch(const std::string &param);
 
 template<class T, class... Args> T from_chars(const std::string &s, Args... args) {
-    const char *end = s.begin() + s.size();
+    const char *begin = s.data();
+    const char *end = begin + s.size();
     T number;
-    auto result = std::from_chars(s.begin(), end, number, args...);
+    auto result = std::from_chars(begin, end, number, args...);
     if (result.ec != std::errc {} || result.ptr != end) throw std::runtime_error("Cannot convert to number");
     return number;
 }
@@ -311,7 +312,7 @@ public:
             return boost::locale::conv::utf_to_utf<wchar_t>(reinterpret_cast<const char *>(sqlite3_column_text(stmt->GetStatement(), i)));
         } else if constexpr (std::is_same_v<T, char *>) {
             if (GetColumnType(i) == SQLITE_NULL) return nullptr;
-            return reinterpret_cast<char *>(sqlite3_column_text(stmt->GetStatement(), i));
+            return const_cast<char *>(reinterpret_cast<const char *>(sqlite3_column_text(stmt->GetStatement(), i)));
         } else if constexpr (std::is_same_v<T, std::string>) {
             if (GetColumnType(i) == SQLITE_NULL) return defaultValue;
             return boost::locale::conv::utf_to_utf<char>(reinterpret_cast<const char *>(sqlite3_column_text(stmt->GetStatement(), i)));

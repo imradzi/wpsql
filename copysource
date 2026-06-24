@@ -1,2 +1,3 @@
 cp /home/radzi/devtools/sqlite3/*.h include/sqlite3/ 
 cp /home/radzi/devtools/sqlite3/sqlite3.c src/sqlite3/
+cp /home/radzi/devtools/sqlite3/shell.c ../sqlite3/

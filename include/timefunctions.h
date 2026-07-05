@@ -51,6 +51,18 @@ inline TimePoint GetTimePoint(const google::protobuf::Timestamp &v) {
 }
 
 inline void SetTimestamp(google::protobuf::Timestamp *v, int64_t epochTime) {
+    // Protobuf Timestamp range: seconds ∈ [-62135596800, 253402300799] (years 0001–9999)
+    // Nanos must be non-negative.
+    constexpr int64_t kMinMs = -62135596800000LL;
+    constexpr int64_t kMaxMs =  253402300799000LL;
+
+    if (epochTime < kMinMs || epochTime > kMaxMs) {
+        // Out-of-range sentinel (e.g., -1 = "never expires", MAX_INT64).
+        // Clear the field so JSON serialization doesn't choke.
+        v->Clear();
+        return;
+    }
+
     v->set_seconds(epochTime / 1000);
     v->set_nanos((epochTime % 1000) * milli2nano_factor);
 }

@@ -6,6 +6,7 @@
 #include <string>
 #include "wpSQLDatabase.h"
 #include "logger/logging.hpp"
+#include <filesystem>
 
 #ifndef DEF_EOFFIELDCHAR
 constexpr char EOFFIELDCHAR = 0x1E;
@@ -76,6 +77,8 @@ namespace DB {
     };
 
     class UserDBRegistry;
+    
+    inline std::string getRelativeName(const std::string &path) { return std::filesystem::relative(std::filesystem::path(path)).string(); }
     class SQLiteBase {
     public:
         bool turnOffSynchronize;
@@ -160,7 +163,9 @@ namespace DB {
 
         void CancelCommand() { db->Interrupt(); }
         const std::string GetDBName() const { return _dbName; }
+        const std::string GetRelativeDBName() const { return getRelativeName(_dbName); }
         virtual const std::string GetTransactionDBName() const { return ""; }
+        const std::string GetRelativeTransactionDBName() const { return getRelativeName(GetTransactionDBName()); }
         virtual std::shared_ptr<TransactionDB> GetTransactionDB();
         const std::string GetDBPath() const { return _pathName; }
         void SetDBName(const std::string &n) { _dbName = n; }

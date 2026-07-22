@@ -167,7 +167,9 @@ bool DB::SQLiteBase::IsColumnExist(wpSQLDatabase &d, const std::string &tabName,
     std::shared_ptr<wpSQLResultSet> rs = d.ExecuteQuery(fmt::format("pragma table_info({})", tabName));
     while (rs->NextRow()) {
         std::string col = rs->Get(1);
-        if (boost::iequals(col, colName)) return true;
+        if (boost::iequals(col, colName)) {
+            return true;
+        }
     }
     return false;
 }
@@ -176,7 +178,9 @@ bool DB::SQLiteBase::IsColumnExist(wpSQLDatabase &d, const std::string &alias, c
     std::shared_ptr<wpSQLResultSet> rs = d.ExecuteQuery(fmt::format("pragma {}.table_info({})", alias, tabName));
     while (rs->NextRow()) {
         std::string col = rs->Get(1);
-        if (boost::iequals(col, colName)) return true;
+        if (boost::iequals(col, colName)) {
+            return true;
+        }
     }
     return false;
 }

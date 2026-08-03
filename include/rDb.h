@@ -269,7 +269,7 @@ namespace DB {
         virtual void EraseLocalKey(const std::string &key);
 
         template<typename T = std::string>
-        T GetKey(const std::string &key, const T &defaultKey = {}) {
+        T GetKey(const std::string &key, const T &defaultKey = {}, bool setIfNotExist = false) {
             T res {};
             if (FindLocalKey(key, res)) return res;
             // res is empty at this point.
@@ -279,18 +279,18 @@ namespace DB {
 
             std::shared_ptr<wpSQLResultSet> rs = stt->ExecuteQuery();
             if (rs->NextRow()) return rs->Get<T>(1);
-            if (defaultKey != res)  // not empty
+            if (defaultKey != res || setIfNotExist)  // not empty
                 SetKey(key, defaultKey);
             return defaultKey;
         }
         template<typename T = std::string>
-        T GetLocalKey(const std::string &key, const T &defaultKey = {}) {
+        T GetLocalKey(const std::string &key, const T &defaultKey = {}, bool setIfNotExist = false) {
             if (sqlDB->IsTableExist("ul_localkeys")) {
                 std::shared_ptr<wpSQLStatement> stt = fn_sttFindLocalKey();
                 stt->Bind(1, key);
                 std::shared_ptr<wpSQLResultSet> rs = stt->ExecuteQuery();
                 if (rs->NextRow()) return rs->Get<T>(1);
-                if (defaultKey != T {})  // not empty
+                if (defaultKey != T {} || setIfNotExist)  // not empty
                     SetLocalKey(key, defaultKey);
             }
             return defaultKey;

@@ -1,4 +1,6 @@
+#include <chrono>
 #include <filesystem>
+#include <thread>
 
 #include "rDb.h"
 
@@ -9,10 +11,15 @@ int waitPerSlice = 1000;  // ms
 int noOfTries = 10;
 
 int waitingFunction(void*, int nCall) {
-    //std::cout << fmt::format("waiting for lock release : {}", nCall) << std::endl;
+    // std::cout << fmt::format("waiting for lock release : {}", nCall) << std::endl;
     if (nCall >= noOfTries) {
         return 0;
     }
+    // SQLite retries immediately when the callback returns non-zero, so the
+    // sleep has to happen here. Without it a writer colliding with another
+    // connection for even a millisecond (hourly backup, registry update,
+    // concurrent session write) fails at once with SQLITE_BUSY.
+    std::this_thread::sleep_for(std::chrono::milliseconds(waitPerSlice));
     return 1;
 }
 

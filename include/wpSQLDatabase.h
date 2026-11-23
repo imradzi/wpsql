@@ -70,6 +70,18 @@ template<typename T> std::string to_string(const T &v) {
 
 extern std::string BuildFTSSearch(const std::string &param);
 
+/// Escapes free text so it can be used as the argument of an FTS5 MATCH.
+///
+/// The text may be anything — a stored record's content, a barcode, what the
+/// user typed — so every whitespace-separated token becomes a quoted string
+/// literal (inner quotes doubled). A quoted token cannot be read as fts5 syntax:
+/// no leading '*' (that is an fts5 "special query" and SQLite answers
+/// "unknown special query"), no `column:` filter, no NEAR()/AND/OR/NOT, no '^'
+/// anchor. `prefix` appends the '*' wildcard for type-ahead searching, which is
+/// only valid outside the quotes.
+/// Returns "" when the text holds no tokens, which matches nothing.
+extern std::string EscapeFTSTerms(const std::string &param, bool prefix = true);
+
 template<class T, class... Args> T from_chars(const std::string &s, Args... args) {
     const char *begin = s.data();
     const char *end = begin + s.size();

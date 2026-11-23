@@ -10,16 +10,21 @@
 #include "logger/logging.hpp"
 #include "wpSQLDatabase.h"
 
-std::string BuildFTSSearch(const std::string& param) {
+std::string EscapeFTSTerms(const std::string& param, bool prefix) {
     std::string res, delim;
     boost::tokenizer<boost::char_separator<char>> tok(param, boost::char_separator<char>(" \t\n", "", boost::drop_empty_tokens));
-    for (auto x: tok) {
+    for (auto x : tok) {
+        // Doubling the quote is the only escape fts5 string literals have; once
+        // a token is quoted nothing inside it is parsed as query syntax.
         boost::ireplace_all(x, "\"", "\"\"");
-        res.append(delim + "\"" + x + "\"" + "*");
+        res.append(delim + "\"" + x + "\"" + (prefix ? "*" : ""));
         delim = " ";
     }
-    if (res.empty()) res = "";
     return res;
+}
+
+std::string BuildFTSSearch(const std::string& param) {
+    return EscapeFTSTerms(param, true);
 }
 
 std::string FormatDate(const std::chrono::system_clock::time_point &tp, const char *format) {
